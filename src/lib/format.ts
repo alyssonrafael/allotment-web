@@ -64,6 +64,16 @@ interface VenueAddressFlat {
   neighborhood?: string | null
 }
 
+export function fmtRelativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime()
+  const mins = Math.floor(diff / 60_000)
+  if (mins < 1) return 'agora'
+  if (mins < 60) return `há ${mins} min`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `há ${hrs}h`
+  return fmtDate(iso)
+}
+
 export function formatVenueAddress(
   addr: VenueAddressFlat,
   mode: 'short' | 'full' = 'short',

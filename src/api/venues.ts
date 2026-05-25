@@ -1,6 +1,7 @@
 import { api } from './client'
 import type {
   CreateVenuePayload,
+  EventRevenue,
   UpdateVenuePayload,
   Venue,
   VenueListItem,
@@ -32,4 +33,9 @@ export async function updateVenue(
 
 export async function deleteVenue(id: string): Promise<void> {
   await api.delete(`/venues/${id}`)
+}
+
+export async function getVenueRevenue(id: string): Promise<EventRevenue> {
+  const { data } = await api.get<EventRevenue>(`/venues/${id}/revenue`)
+  return data
 }

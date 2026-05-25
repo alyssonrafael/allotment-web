@@ -1,4 +1,14 @@
-import type { AllotmentStatus, EventStatus, EventType } from '#/types'
+import type { ActivityType, AllotmentStatus, EventStatus, EventType } from '#/types'
+import type { LucideIcon } from 'lucide-react'
+import {
+  Ban,
+  BadgeDollarSign,
+  CheckCircle,
+  Handshake,
+  Pencil,
+  PlusCircle,
+  Trash2,
+} from 'lucide-react'
 
 export const GRID_SIZE = 1
 export const SCALE = 50
@@ -99,4 +109,26 @@ export const EVENT_SCREEN_LABELS: Record<string, string> = {
   stands:    'Stands',
   comercial: 'Comercial',
   financas:  'Finanças',
+}
+
+// ── Activity icons & colors ─────────────────────────────────────────────────
+
+export const ACTIVITY_ICONS: Record<ActivityType, LucideIcon> = {
+  CREATED:   PlusCircle,
+  UPDATED:   Pencil,
+  DELETED:   Trash2,
+  SOLD:      BadgeDollarSign,
+  RESERVED:  Handshake,
+  BLOCKED:   Ban,
+  AVAILABLE: CheckCircle,
+}
+
+export const ACTIVITY_COLORS: Record<ActivityType, string> = {
+  CREATED:   'text-status-livre',
+  UPDATED:   'text-brand-primary',
+  DELETED:   'text-red-500',
+  SOLD:      'text-status-vendido',
+  RESERVED:  'text-status-reservado',
+  BLOCKED:   'text-status-bloqueado',
+  AVAILABLE: 'text-status-livre',
 }

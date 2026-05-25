@@ -124,3 +124,28 @@ export type UpdateAllotmentPayload = Partial<
 
 export type PatchPositionPayload = { x: number; y: number }
 export type PatchStatusPayload   = { status: AllotmentStatus }
+
+// ── Activity & Revenue ──────────────────────────────────────────────────────
+
+export type ActivityType =
+  | 'CREATED' | 'UPDATED' | 'DELETED'
+  | 'SOLD' | 'RESERVED' | 'BLOCKED' | 'AVAILABLE'
+
+export interface RecentActivity {
+  id: string
+  action: string      // descrição legível: "Lote A01 passou para RESERVED"
+  type: ActivityType  // usado para selecionar o ícone
+  createdAt: string   // ISO 8601
+}
+
+export interface EventRevenue {
+  realized: number       // soma dos lotes SOLD
+  inNegotiation: number  // soma dos lotes RESERVED
+  total: number          // realized + inNegotiation
+  counts: {
+    sold: number
+    reserved: number
+    available: number
+    blocked: number
+  }
+}

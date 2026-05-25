@@ -3,6 +3,7 @@ import {
   createVenue,
   deleteVenue,
   getVenue,
+  getVenueRevenue,
   getVenues,
   updateVenue,
 } from '#/api/venues'
@@ -11,6 +12,7 @@ import type { CreateVenuePayload, UpdateVenuePayload } from '#/types'
 export const venuesKeys = {
   all: ['venues'] as const,
   detail: (id: string) => ['venue', id] as const,
+  revenue: (id: string) => ['venue', id, 'revenue'] as const,
 }
 
 export function useVenuesQuery() {
@@ -24,6 +26,14 @@ export function useVenueQuery(id: string | undefined) {
   return useQuery({
     queryKey: id ? venuesKeys.detail(id) : ['venue', 'none'],
     queryFn: () => getVenue(id as string),
+    enabled: Boolean(id),
+  })
+}
+
+export function useVenueRevenueQuery(id: string | undefined) {
+  return useQuery({
+    queryKey: id ? venuesKeys.revenue(id) : ['venue', 'none', 'revenue'],
+    queryFn: () => getVenueRevenue(id as string),
     enabled: Boolean(id),
   })
 }

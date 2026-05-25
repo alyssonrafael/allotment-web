@@ -1,5 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createEvent, deleteEvent, getEvent, getEvents, updateEvent } from '#/api/events'
+import {
+  createEvent,
+  deleteEvent,
+  getEvent,
+  getEventActivities,
+  getEventRevenue,
+  getEvents,
+  updateEvent,
+} from '#/api/events'
 import type { CreateEventPayload, EventStatus, EventType, UpdateEventPayload } from '#/types'
 
 interface UseEventsQueryParams {
@@ -12,6 +20,8 @@ export const eventsKeys = {
   all: ['events'] as const,
   filtered: (params: UseEventsQueryParams) => ['events', params] as const,
   detail: (id: string) => ['event', id] as const,
+  revenue: (id: string) => ['event', id, 'revenue'] as const,
+  activities: (id: string) => ['event', id, 'activities'] as const,
 }
 
 export function useEventsQuery(params?: UseEventsQueryParams) {
@@ -48,6 +58,23 @@ export function useUpdateEvent() {
       qc.invalidateQueries({ queryKey: eventsKeys.all })
       qc.invalidateQueries({ queryKey: eventsKeys.detail(id) })
     },
+  })
+}
+
+export function useEventRevenueQuery(id: string | undefined) {
+  return useQuery({
+    queryKey: id ? eventsKeys.revenue(id) : ['event', 'none', 'revenue'],
+    queryFn: () => getEventRevenue(id as string),
+    enabled: Boolean(id),
+  })
+}
+
+export function useEventActivitiesQuery(id: string | undefined) {
+  return useQuery({
+    queryKey: id ? eventsKeys.activities(id) : ['event', 'none', 'activities'],
+    queryFn: () => getEventActivities(id as string),
+    enabled: Boolean(id),
+    refetchInterval: 30_000,
   })
 }
 

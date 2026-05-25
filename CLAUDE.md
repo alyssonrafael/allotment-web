@@ -37,8 +37,8 @@ This is an **event pavilion management app** built with **TanStack Start** (SSR-
 src/
   api/             ← axios client + per-resource functions
     client.ts      ← axios instance (baseURL from VITE_API_URL + VITE_API_PREFIX)
-    venues.ts      ← getVenues, getVenue, createVenue, updateVenue, deleteVenue
-    events.ts      ← getEvents, getEvent, createEvent, updateEvent, deleteEvent
+    venues.ts      ← getVenues, getVenue, createVenue, updateVenue, deleteVenue, getVenueRevenue
+    events.ts      ← getEvents, getEvent, createEvent, updateEvent, deleteEvent, getEventRevenue, getEventActivities
     allotments.ts  ← CRUD + patchPosition, patchStatus
   components/
     ui/            ← shadcn/ui (do not edit manually)
@@ -49,7 +49,7 @@ src/
     shared/        ← StatusBadge, ThemeToggle, KPI
   hooks/           ← useVenues, useEvents, useAllotments, useThemeTransition, useGlobalHotkeys
   stores/          ← canvasStore.ts, historyStore.ts, uiStore.ts
-  types/           ← index.ts (Venue, Event, Allotment, AllotmentStatus + payloads)
+  types/           ← index.ts (Venue, Event, Allotment, AllotmentStatus, RecentActivity, EventRevenue + payloads)
   lib/             ← utils.ts (cn), collision.ts, constants.ts, format.ts
   routes/          ← file-based routes (see Frontend Routes below)
 ```
@@ -95,6 +95,7 @@ Venues
   GET     /venues/:id          returns VenueWithEvents
   PUT     /venues/:id
   DELETE  /venues/:id          fails 409 if venue has events
+  GET     /venues/:id/revenue  returns EventRevenue — receita agregada de todos os eventos do pavilhão
 
 Events
   POST    /events              body: { name, type (UPPERCASE), startDate, endDate (ISO), venueId, canvasWidth?, canvasHeight? }
@@ -102,6 +103,8 @@ Events
   GET     /events/:id          returns EventDetail (venue + allotments[] + status computado)
   PUT     /events/:id          name, type, startDate, endDate, canvasWidth, canvasHeight (venueId immutable)
   DELETE  /events/:id          cascade-deletes allotments
+  GET     /events/:id/revenue    returns EventRevenue { realized, inNegotiation, total, counts }
+  GET     /events/:id/activities returns RecentActivity[] — últimas 24h, mais recente primeiro
 
 Allotments
   POST    /events/:eventId/allotments

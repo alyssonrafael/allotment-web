@@ -181,6 +181,31 @@ export type UpdateAllotmentPayload = Partial<
 
 export type PatchPositionPayload = { x: number; y: number }
 export type PatchStatusPayload   = { status: AllotmentStatus }
+
+// ── Activity & Revenue ──────────────────────────────────────────────────────
+
+export type ActivityType =
+  | 'CREATED' | 'UPDATED' | 'DELETED'
+  | 'SOLD' | 'RESERVED' | 'BLOCKED' | 'AVAILABLE'
+
+export interface RecentActivity {
+  id: string
+  action: string      // descrição legível: "Lote A01 passou para RESERVED"
+  type: ActivityType  // usado para selecionar ícone via ACTIVITY_ICONS
+  createdAt: string   // ISO 8601
+}
+
+export interface EventRevenue {
+  realized: number       // soma dos lotes SOLD
+  inNegotiation: number  // soma dos lotes RESERVED
+  total: number          // realized + inNegotiation
+  counts: {
+    sold: number
+    reserved: number
+    available: number
+    blocked: number
+  }
+}
 ```
 
 ---
@@ -206,6 +231,7 @@ interface ApiError {
 | `GET` | `/venues/:id` | — | `200 VenueWithEvents` | inclui events[] |
 | `PUT` | `/venues/:id` | `UpdateVenuePayload` | `200 Venue` | todos os campos opcionais |
 | `DELETE` | `/venues/:id` | — | `204` | 409 se tiver eventos vinculados |
+| `GET` | `/venues/:id/revenue` | — | `200 EventRevenue` | receita agregada de todos os eventos; use `useVenueRevenueQuery` |
 
 ### 5.3 Events — `/events`
 
@@ -216,6 +242,8 @@ interface ApiError {
 | `GET` | `/events/:id` | — | `200 EventDetail` | inclui venue + allotments[] |
 | `PUT` | `/events/:id` | `UpdateEventPayload` | `200 Event` | venueId imutável |
 | `DELETE` | `/events/:id` | — | `204` | allotments removidos em cascata |
+| `GET` | `/events/:id/revenue` | — | `200 EventRevenue` | receita por status; use `useEventRevenueQuery` |
+| `GET` | `/events/:id/activities` | — | `200 RecentActivity[]` | feed últimas 24h; polling 30s via `useEventActivitiesQuery` |
 
 ### 5.4 Allotments — `/events/:eventId/allotments` e `/allotments/:id`
 

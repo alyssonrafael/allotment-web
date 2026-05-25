@@ -10,7 +10,7 @@ import {
   Plus,
   TrendingUp,
 } from 'lucide-react'
-import { useVenueQuery } from '#/hooks/useVenues'
+import { useVenueQuery, useVenueRevenueQuery } from '#/hooks/useVenues'
 import { useEventsQuery } from '#/hooks/useEvents'
 import { ThemeToggle } from '#/components/shared/ThemeToggle'
 import { Button } from '#/components/ui/button'
@@ -19,8 +19,8 @@ import { Skeleton } from '#/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
 import { EventCard } from '#/components/events/EventCard'
 import { CreateEventDialog } from '#/components/events/CreateEventDialog'
-import { formatVenueAddress } from '#/lib/format'
-import type { EventListItem, EventStatus } from '#/types'
+import { fmtBRLcompact, formatVenueAddress } from '#/lib/format'
+import type { EventListItem, EventRevenue, EventStatus } from '#/types'
 
 type FilterValue = 'all' | EventStatus
 
@@ -32,6 +32,7 @@ function VenueDetailScreen() {
   const { venueId } = Route.useParams()
   const venueQuery = useVenueQuery(venueId)
   const eventsQuery = useEventsQuery({ venueId })
+  const revenueQuery = useVenueRevenueQuery(venueId)
   const [isCreateEventOpen, setCreateEventOpen] = useState(false)
   const [tab, setTab] = useState<FilterValue>('all')
 
@@ -108,6 +109,7 @@ function VenueDetailScreen() {
             <PavilionHero
               venue={venue}
               counts={counts}
+              revenue={revenueQuery.data}
               onNewEvent={() => setCreateEventOpen(true)}
             />
 
@@ -148,10 +150,11 @@ function VenueDetailScreen() {
 interface PavilionHeroProps {
   venue: NonNullable<ReturnType<typeof useVenueQuery>['data']>
   counts: Record<FilterValue, number>
+  revenue: EventRevenue | undefined
   onNewEvent: () => void
 }
 
-function PavilionHero({ venue, counts, onNewEvent }: PavilionHeroProps) {
+function PavilionHero({ venue, counts, revenue, onNewEvent }: PavilionHeroProps) {
   const fullAddress = formatVenueAddress(venue, 'full')
   const area = venue.width * venue.height
 
@@ -197,16 +200,14 @@ function PavilionHero({ venue, counts, onNewEvent }: PavilionHeroProps) {
         <Kpi
           icon={DollarSign}
           label="Receita realizada"
-          value="—"
+          value={revenue ? fmtBRLcompact(revenue.realized) : '—'}
           tone="text-brand-accent"
-          hint="Disponível após endpoint agregado"
         />
         <Kpi
           icon={TrendingUp}
           label="Em negociação"
-          value="—"
+          value={revenue ? fmtBRLcompact(revenue.inNegotiation) : '—'}
           tone="text-brand-primary"
-          hint="Disponível após endpoint agregado"
         />
         <Button
           onClick={onNewEvent}
@@ -225,12 +226,11 @@ interface KpiProps {
   label: string
   value: number | string
   tone: string
-  hint?: string
 }
 
-function Kpi({ icon: Icon, label, value, tone, hint }: KpiProps) {
+function Kpi({ icon: Icon, label, value, tone }: KpiProps) {
   return (
-    <div className="flex flex-col gap-1" title={hint}>
+    <div className="flex flex-col gap-1">
       <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-fg-muted">
         <Icon size={12} className={tone} />
         {label}

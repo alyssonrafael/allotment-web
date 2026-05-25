@@ -4,8 +4,10 @@ import type {
   Event,
   EventDetail,
   EventListItem,
+  EventRevenue,
   EventStatus,
   EventType,
+  RecentActivity,
   UpdateEventPayload,
 } from '#/types'
 
@@ -45,4 +47,14 @@ export async function updateEvent(
 
 export async function deleteEvent(id: string): Promise<void> {
   await api.delete(`/events/${id}`)
+}
+
+export async function getEventRevenue(id: string): Promise<EventRevenue> {
+  const { data } = await api.get<EventRevenue>(`/events/${id}/revenue`)
+  return data
+}
+
+export async function getEventActivities(id: string): Promise<RecentActivity[]> {
+  const { data } = await api.get<RecentActivity[]>(`/events/${id}/activities`)
+  return data
 }
