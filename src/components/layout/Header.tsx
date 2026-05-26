@@ -1,6 +1,15 @@
-import { Bell } from 'lucide-react'
+import { useParams, useRouterState } from '@tanstack/react-router'
 import { HeaderBreadcrumb } from './HeaderBreadcrumb'
 import { useUIStore } from '#/stores/uiStore'
+import { ThemeToggle } from '#/components/shared/ThemeToggle'
+
+const PAGE_TITLES: Record<string, string> = {
+  dashboard: 'Visão geral',
+  pavilhao:  'Editor visual',
+  stands:    'Stands',
+  comercial: 'Comercial',
+  financas:  'Finanças',
+}
 
 interface HeaderProps {
   actions?: React.ReactNode
@@ -8,23 +17,32 @@ interface HeaderProps {
 
 export function Header({ actions }: HeaderProps) {
   const saveStatus = useUIStore((s) => s.saveStatus)
+  const params = useParams({ strict: false })
+  const pathname = useRouterState({ select: (s) => s.location.pathname })
+
+  const activeScreen = params.eventId
+    ? Object.keys(PAGE_TITLES).find((screen) =>
+        pathname.startsWith(`/events/${params.eventId}/${screen}`),
+      )
+    : undefined
+
+  const pageTitle = activeScreen ? PAGE_TITLES[activeScreen] : undefined
 
   return (
-    <header className="sticky top-0 z-10 flex h-[72px] items-center gap-4 border-b border-border bg-background/80 px-7 backdrop-blur-md">
-      <div className="flex min-w-0 flex-1 items-center gap-4">
+    <header className="sticky top-0 z-10 border-b border-border bg-background/80 px-7 py-3 backdrop-blur-md">
+      <div className="flex items-center justify-between">
         <HeaderBreadcrumb />
-        <SaveIndicator status={saveStatus} />
+        <div className="flex items-center gap-2">
+          {actions}
+          <ThemeToggle />
+        </div>
       </div>
-      <div className="ml-auto flex items-center gap-2">
-        {actions}
-        <button
-          type="button"
-          aria-label="Notificações"
-          className="inline-flex size-9 items-center justify-center rounded-md border border-border bg-card text-fg-muted transition-colors hover:bg-surface-2"
-        >
-          <Bell size={15} />
-        </button>
-      </div>
+      {pageTitle && (
+        <div className="mt-1 flex items-center gap-3">
+          <h1 className="text-[22px] font-bold leading-tight text-fg">{pageTitle}</h1>
+          <SaveIndicator status={saveStatus} />
+        </div>
+      )}
     </header>
   )
 }

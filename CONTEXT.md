@@ -252,7 +252,7 @@ interface ApiError {
 | `POST` | `/events/:eventId/allotments` | `CreateAllotmentPayload` | `201 Allotment` | valida bounds + overlap; 409 em conflito |
 | `GET` | `/events/:eventId/allotments` | — | `200 Allotment[]` | ordenados por criação |
 | `GET` | `/allotments/:id` | — | `200 Allotment` | |
-| `PUT` | `/allotments/:id` | `UpdateAllotmentPayload` | `200 Allotment` | revalida posição + colisão; code imutável |
+| `PUT` | `/allotments/:id` | `UpdateAllotmentPayload` | `200 Allotment` | revalida posição + colisão; `code` imutável — `UpdateAllotmentPayload` já o omite |
 | `PATCH` | `/allotments/:id/position` | `{ x, y }` | `200 Allotment` | drag & drop — só x/y |
 | `PATCH` | `/allotments/:id/status` | `{ status }` | `200 Allotment` | kanban — só status |
 | `DELETE` | `/allotments/:id` | — | `204` | |
@@ -272,13 +272,17 @@ Nenhum allotment pode sobrepor outro (AABB)
 | Rota | Tela | Descrição |
 |---|---|---|
 | `/events` | Hub de pavilhões | Lista venues com eventos agrupados; modais de criação |
-| `/events/$eventId/dashboard` | Dashboard | KPIs, donut chart de status, heatmap, atividade recente |
-| `/events/$eventId/pavilhao` | Editor visual | Canvas drag/drop/resize (react-konva), mini-mapa, painel lateral |
-| `/events/$eventId/stands` | Gestão de stands | Tabela com filtros, busca, ações inline |
+| `/events/$eventId/dashboard` | Dashboard | KPIs, donut chart de status, heatmap, atividade recente paginada (PAGE_SIZE 10) |
+| `/events/$eventId/pavilhao` | Editor visual | Canvas drag/drop/resize (react-konva), mini-mapa, painel lateral; aceita `?standId=` para pré-selecionar stand |
+| `/events/$eventId/stands` | Gestão de stands | Tabela paginada (PAGE_SIZE 10) com filtros por status + busca; edição inline (nome/preço — `code` imutável); exclusão com `AlertDialog`; botão de mapa navega para `/pavilhao?standId=` |
 | `/events/$eventId/comercial` | Funil de vendas | Kanban com drag entre 4 colunas de status |
-| `/events/$eventId/financas` | Previsão financeira | KPIs, barras por status, ranking de stands |
+| `/events/$eventId/financas` | Análise financeira | 3 KPIs (Potencial/Comprometido/Realizado), barra segmentada de receita por status, mini-cards por status, distribuição de área, tabela de contribuição com sort (preço/dimensão/status) e paginação (PAGE_SIZE 8) |
 
 `/events/$eventId/route.tsx` é a layout route: carrega o evento, seta `uiStore.activeEventId` e renderiza `<AppShell>` com `<Outlet>`.
+
+### Search param: pavilhão `?standId`
+
+A rota `/events/$eventId/pavilhao` declara `validateSearch` com `standId?: string`. Ao montar, o componente chama `canvasStore.setSelected(standId)` via `useEffect`. O botão de mapa na tela de stands passa `search={{ standId: a.id }}` automaticamente via TanStack Router `<Link>`.
 
 ---
 
@@ -507,6 +511,8 @@ hero: 28px → cards de destaque
 ### shadcn/ui instalados
 
 `button`, `card`, `input`, `label`, `textarea`, `select`, `badge`, `separator`, `tooltip`, `dialog`, `alert-dialog`, `dropdown-menu`, `sheet`, `tabs`, `table`, `avatar`, `progress`, `skeleton`, `sonner`
+
+> **Atenção:** `tooltip.tsx` foi adaptado para usar os tokens do projeto (`bg-card`, `text-fg`, `border-border`) em vez das cores invertidas padrão do shadcn. Não reverter ao regenerar o componente.
 
 ---
 

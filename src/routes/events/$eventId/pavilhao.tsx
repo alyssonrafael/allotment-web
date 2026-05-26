@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { useEffect } from 'react'
 import { Download, Minus, Plus, Save, ZoomIn } from 'lucide-react'
 import { useEventQuery } from '#/hooks/useEvents'
 import { useAllotmentsQuery } from '#/hooks/useAllotments'
@@ -9,6 +10,9 @@ import { useCanvasStore } from '#/stores/canvasStore'
 import { cn } from '#/lib/utils.ts'
 
 export const Route = createFileRoute('/events/$eventId/pavilhao')({
+  validateSearch: (search: Record<string, unknown>) => ({
+    standId: typeof search.standId === 'string' ? search.standId : undefined,
+  }),
   component: PavilionEditorScreen,
 })
 
@@ -21,9 +25,14 @@ const PRESETS = [
 
 function PavilionEditorScreen() {
   const { eventId } = Route.useParams()
+  const { standId } = Route.useSearch()
   const event = useEventQuery(eventId)
   const allotments = useAllotmentsQuery(eventId)
-  const { snapEnabled, toggleSnap, zoom, setZoom } = useCanvasStore()
+  const { snapEnabled, toggleSnap, zoom, setZoom, setSelected } = useCanvasStore()
+
+  useEffect(() => {
+    if (standId) setSelected(standId)
+  }, [standId, setSelected])
 
   const isLoading = event.isLoading || allotments.isLoading
 

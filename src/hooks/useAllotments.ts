@@ -7,6 +7,7 @@ import {
   patchStatus,
   updateAllotment,
 } from '#/api/allotments'
+import { eventsKeys } from '#/hooks/useEvents'
 import type {
   CreateAllotmentPayload,
   PatchPositionPayload,
@@ -65,6 +66,8 @@ export function usePatchStatus(eventId: string) {
       patchStatus(id, payload),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: allotmentsKeys.byEvent(eventId) })
+      qc.invalidateQueries({ queryKey: eventsKeys.revenue(eventId) })
+      qc.invalidateQueries({ queryKey: eventsKeys.activities(eventId) })
     },
   })
 }

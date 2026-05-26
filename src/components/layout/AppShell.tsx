@@ -11,12 +11,12 @@ export function AppShell({ actions, children }: AppShellProps) {
   useGlobalHotkeys()
 
   return (
-    <div className="flex min-h-screen bg-background text-fg">
+    <div className="flex h-screen overflow-hidden bg-background text-fg">
       <Sidebar />
-      <div className="flex flex-1 flex-col">
+      <div className="flex flex-1 flex-col overflow-hidden">
         <Header actions={actions} />
-        <main className="flex-1 overflow-auto px-7 py-6">
-          <div className="mx-auto w-full max-w-[1500px]">{children}</div>
+        <main className="flex-1 overflow-y-auto px-7 py-6">
+          <div className="mx-auto w-full max-w-375">{children}</div>
         </main>
       </div>
     </div>

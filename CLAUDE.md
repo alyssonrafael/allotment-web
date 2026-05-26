@@ -59,13 +59,17 @@ src/
 | Route | Screen |
 |---|---|
 | `/events` | Lista de eventos com seletor |
-| `/events/$eventId/dashboard` | KPIs, donut, heatmap, atividade |
-| `/events/$eventId/pavilhao` | Editor visual (canvas drag/drop/resize) |
-| `/events/$eventId/stands` | Tabela de stands com filtros |
+| `/events/$eventId/dashboard` | KPIs, donut, heatmap, atividade recente paginada |
+| `/events/$eventId/pavilhao` | Editor visual (canvas drag/drop/resize) — aceita `?standId=` para pré-selecionar stand |
+| `/events/$eventId/stands` | Tabela com filtros por status, busca, edição (nome/preço), exclusão com confirmação, link para canvas |
 | `/events/$eventId/comercial` | Kanban por status |
-| `/events/$eventId/financas` | Previsão financeira |
+| `/events/$eventId/financas` | 3 KPIs, receita por status (barra segmentada + mini-cards), distribuição por área, tabela de contribuição ordenável |
 
 Layout route: `src/routes/events/$eventId/route.tsx` wraps child routes in `<AppShell>`.
+
+### Pavilhão — search param `standId`
+
+`/events/$eventId/pavilhao?standId=<id>` pré-seleciona o stand no canvas via `canvasStore.setSelected()`. O botão de mapa na tela de stands passa este param automaticamente.
 
 ## Canvas: critical business rules
 
@@ -123,6 +127,7 @@ All errors follow `{ statusCode, message, detail: string | string[] }`.
 - `Venue` address fields are **flat** on the object (`city`, `state`, `street`, etc.) — no nested `address`
 - `Event.status` is **returned** by the API (computed) but never sent in request bodies
 - `getEvents(params?)` accepts `{ venueId?, type?, status? }` — all optional
+- `Allotment.code` is **immutable** — `PUT /allotments/:id` accepts all fields except `code`; `UpdateAllotmentPayload` already omits it
 
 ## Status colours
 
@@ -140,7 +145,7 @@ Each status has three variants: `--status-{x}` (solid), `--status-{x}-50` (soft 
 - **Light mode is the default.** Bootstrap via inline `<script>` before React mounts; toggle persists to `localStorage`. Dark mode available via `ThemeToggle`.
 - Theme transition: View Transitions API with `clip-path` circle expand from click point (`useThemeTransition` hook).
 - Fonts: **Inter** (UI, 400–900) + **JetBrains Mono** (codes, IDs, monetary values, 400–600).
-- All shadcn components live in `src/components/ui/` — do not edit manually; customise via variants.
+- All shadcn components live in `src/components/ui/` — do not edit manually; customise via variants. **Exception:** `tooltip.tsx` was adapted to use project tokens (`bg-card`, `text-fg`, `border-border`) instead of the shadcn default inverted colors.
 - Use `cn()` (clsx + tailwind-merge) for all conditional class logic.
 - CSS tokens are in `src/styles.css` with `@theme inline` mapping them to Tailwind utilities.
 - Sidebar: 240 px fixed. Header: sticky 72 px. Content max-width: 1500 px centred.

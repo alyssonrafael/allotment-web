@@ -1,12 +1,15 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { Activity, ChartPie, Map, Wallet } from 'lucide-react'
+import { useState } from 'react'
+import { Activity, ChartPie, ChevronDown, Map, Wallet } from 'lucide-react'
 import { useEventQuery, useEventRevenueQuery, useEventActivitiesQuery } from '#/hooks/useEvents'
 import { useAllotmentsQuery } from '#/hooks/useAllotments'
 import { Card } from '#/components/ui/card'
 import { Skeleton } from '#/components/ui/skeleton'
 import { KPI } from '#/components/shared/KPI'
+import { HeatmapCard } from '#/components/dashboard/HeatmapCard'
 import { fmtBRLcompact, fmtRelativeTime } from '#/lib/format'
 import { ACTIVITY_COLORS, ACTIVITY_ICONS } from '#/lib/constants'
+import { cn } from '#/lib/utils'
 import type { AllotmentStatus, RecentActivity } from '#/types'
 
 export const Route = createFileRoute('/events/$eventId/dashboard')({
@@ -82,16 +85,26 @@ function DashboardScreen() {
 
       <section className="grid gap-3 lg:grid-cols-[1fr_1.4fr_1fr]">
         <Card className="p-5">
-          <div className="flex items-center justify-between">
+          <div className="flex items-start justify-between">
             <h3 className="text-h2">Status dos stands</h3>
-          </div>
-          <div className="mt-4 flex items-center justify-center text-fg-muted">
-            <div className="text-center">
-              <div className="text-display">{totalStands}</div>
-              <div className="text-caption">Stands</div>
+            <div className="flex size-8 shrink-0 items-center justify-center rounded-[10px] bg-brand-violet/10 text-brand-violet">
+              <ChartPie size={15} />
             </div>
           </div>
-          <ul className="mt-5 space-y-2 text-[13px]">
+          <div className="mt-3 flex justify-center">
+            <div className="size-37.5">
+              <DonutChart
+                data={[
+                  { value: rc?.available ?? counts.AVAILABLE, color: 'var(--status-livre)' },
+                  { value: rc?.reserved  ?? counts.RESERVED,  color: 'var(--status-reservado)' },
+                  { value: rc?.sold      ?? counts.SOLD,       color: 'var(--status-vendido)' },
+                  { value: rc?.blocked   ?? counts.BLOCKED,    color: 'var(--status-bloqueado)' },
+                ]}
+                total={totalStands}
+              />
+            </div>
+          </div>
+          <ul className="mt-4 space-y-2 text-[13px]">
             <LegendRow label="Livre"     count={rc?.available ?? counts.AVAILABLE} total={totalStands} dot="bg-status-livre" />
             <LegendRow label="Reservado" count={rc?.reserved  ?? counts.RESERVED}  total={totalStands} dot="bg-status-reservado" />
             <LegendRow label="Vendido"   count={rc?.sold      ?? counts.SOLD}       total={totalStands} dot="bg-status-vendido" />
@@ -99,15 +112,11 @@ function DashboardScreen() {
           </ul>
         </Card>
 
-        <Card className="p-5">
-          <h3 className="text-h2">Mapa de calor</h3>
-          <div className="mt-1 text-[12px] text-fg-muted">
-            Visão por status — {event.data?.canvasWidth ?? '—'} × {event.data?.canvasHeight ?? '—'} m
-          </div>
-          <div className="mt-4 flex h-55 items-center justify-center rounded-md border border-dashed border-border text-[12px] text-fg-subtle">
-            Mapa de calor — implementação futura
-          </div>
-        </Card>
+        <HeatmapCard
+          allotments={list}
+          canvasWidth={event.data?.canvasWidth ?? 0}
+          canvasHeight={event.data?.canvasHeight ?? 0}
+        />
 
         <Card className="p-5">
           <h3 className="text-h2">Previsão financeira</h3>
@@ -134,28 +143,72 @@ function DashboardScreen() {
         </Card>
       </section>
 
-      <Card className="p-5">
-        <div className="flex items-center justify-between">
-          <h3 className="text-h2">Atividade recente</h3>
-          <span className="text-[11px] text-fg-subtle">Últimas 24h</span>
-        </div>
-        {activities.isLoading ? (
-          <div className="mt-4 space-y-3">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-10 rounded-lg" />
-            ))}
-          </div>
-        ) : (activities.data?.length ?? 0) === 0 ? (
-          <div className="mt-4 text-[13px] text-fg-muted">Sem atividades recentes.</div>
-        ) : (
-          <ul className="mt-4 space-y-1">
-            {activities.data!.map((act) => (
-              <ActivityRow key={act.id} activity={act} />
-            ))}
-          </ul>
-        )}
-      </Card>
+      <ActivityCard activities={activities.data ?? []} isLoading={activities.isLoading} />
     </div>
+  )
+}
+
+function DonutChart({
+  data,
+  total,
+}: {
+  data: Array<{ value: number; color: string }>
+  total: number
+}) {
+  const cx = 80, cy = 80, r = 54, sw = 18
+  const c = 2 * Math.PI * r
+  const GAP = 4
+
+  let offset = 0
+  return (
+    <svg viewBox="0 0 160 160" width="100%" height="100%">
+      <circle cx={cx} cy={cy} r={r} fill="none" strokeWidth={sw} stroke="var(--surface-2)" />
+      {total > 0 &&
+        data.map((seg, i) => {
+          const full = (seg.value / total) * c
+          const len = Math.max(0, full - GAP)
+          const rot = -90 + (offset / c) * 360
+          offset += full
+          if (seg.value === 0) return null
+          return (
+            <circle
+              key={i}
+              cx={cx}
+              cy={cy}
+              r={r}
+              fill="none"
+              strokeWidth={sw}
+              stroke={seg.color}
+              strokeDasharray={`${len} ${c}`}
+              strokeLinecap="round"
+              transform={`rotate(${rot}, ${cx}, ${cy})`}
+            />
+          )
+        })}
+      <text
+        x={cx}
+        y={cy - 8}
+        textAnchor="middle"
+        dominantBaseline="middle"
+        fontSize="26"
+        fontWeight="800"
+        fill="var(--fg)"
+      >
+        {total}
+      </text>
+      <text
+        x={cx}
+        y={cy + 13}
+        textAnchor="middle"
+        dominantBaseline="middle"
+        fontSize="9.5"
+        fontWeight="700"
+        fill="var(--fg-muted)"
+        letterSpacing="1.5"
+      >
+        STANDS
+      </text>
+    </svg>
   )
 }
 
@@ -168,6 +221,78 @@ function countByStatus(list: Array<{ status: AllotmentStatus }>) {
   }
   for (const a of list) acc[a.status] += 1
   return acc
+}
+
+const PAGE_SIZE = 10
+
+function ActivityCard({ activities, isLoading }: { activities: RecentActivity[]; isLoading: boolean }) {
+  const [page, setPage] = useState(0)
+  const totalPages = Math.max(1, Math.ceil(activities.length / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages - 1)
+  const visible = activities.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE)
+
+  return (
+    <Card className="p-5">
+      <div className="flex items-center justify-between">
+        <h3 className="text-h2">Atividade recente</h3>
+        <span className="text-[11px] text-fg-subtle">Últimas 24h</span>
+      </div>
+      {isLoading ? (
+        <div className="mt-4 space-y-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-10 rounded-lg" />
+          ))}
+        </div>
+      ) : activities.length === 0 ? (
+        <div className="mt-4 text-[13px] text-fg-muted">Sem atividades recentes.</div>
+      ) : (
+        <>
+          <ul className="mt-4 space-y-1">
+            {visible.map((act) => (
+              <ActivityRow key={act.id} activity={act} />
+            ))}
+          </ul>
+          {totalPages > 1 && (
+            <div className="mt-4 flex items-center justify-between border-t border-border pt-3">
+              <span className="text-[11px] text-fg-subtle">
+                {safePage * PAGE_SIZE + 1}–{Math.min((safePage + 1) * PAGE_SIZE, activities.length)} de {activities.length}
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  disabled={safePage === 0}
+                  className="flex size-7 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg disabled:pointer-events-none disabled:opacity-30"
+                >
+                  <ChevronDown size={13} className="rotate-90" />
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setPage(i)}
+                    className={cn(
+                      'flex size-7 items-center justify-center rounded-md text-[12px] font-semibold transition-colors',
+                      i === safePage
+                        ? 'bg-brand-primary text-white'
+                        : 'text-fg-muted hover:bg-surface-2 hover:text-fg',
+                    )}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                  disabled={safePage === totalPages - 1}
+                  className="flex size-7 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg disabled:pointer-events-none disabled:opacity-30"
+                >
+                  <ChevronDown size={13} className="-rotate-90" />
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </Card>
+  )
 }
 
 function ActivityRow({ activity }: { activity: RecentActivity }) {
@@ -202,9 +327,9 @@ function LegendRow({
         <span className={`size-2 rounded-full ${dot}`} />
         {label}
       </span>
-      <span className="flex items-center gap-3">
-        <span className="font-bold text-fg">{count}</span>
-        <span className="text-fg-subtle">{pct}%</span>
+      <span className="flex items-center gap-2">
+        <span className="w-6 text-right font-bold tabular-nums text-fg">{count}</span>
+        <span className="w-9 text-right tabular-nums text-fg-subtle">{pct}%</span>
       </span>
     </li>
   )
@@ -222,15 +347,33 @@ function FinanceRow({
   pct: number
 }) {
   const barTone =
-    tone === 'accent' ? 'bg-brand-accent' : tone === 'livre' ? 'bg-status-livre' : 'bg-surface-3'
+    tone === 'accent'
+      ? 'bg-brand-accent'
+      : tone === 'livre'
+        ? 'bg-status-livre'
+        : 'bg-surface-3'
+
   return (
     <div>
-      <div className="flex items-center justify-between">
-        <span className="text-fg-muted">{label}</span>
-        <span className="font-bold text-fg">{value}</span>
+      <div className="flex items-center gap-3">
+        <span className="flex-1 text-fg-muted">{label}</span>
+
+        <div className="flex items-center gap-3 font-bold tabular-nums">
+          <span className="w-[90px] text-right text-fg">
+            {value}
+          </span>
+
+          <span className="w-[52px] text-right text-fg-muted">
+            {pct.toFixed(0)}%
+          </span>
+        </div>
       </div>
+
       <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
-        <div className={`h-full ${barTone}`} style={{ width: `${Math.max(2, pct)}%` }} />
+        <div
+          className={`h-full ${barTone}`}
+          style={{ width: `${Math.max(2, pct)}%` }}
+        />
       </div>
     </div>
   )
