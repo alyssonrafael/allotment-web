@@ -85,8 +85,11 @@ export function PavilionStage({
 
   const widthPx = event.canvasWidth * SCALE
   const heightPx = event.canvasHeight * SCALE
-  const maxRight = event.canvasWidth * SCALE
-  const maxBottom = event.canvasHeight * SCALE
+  // O boundBoxFunc do Konva opera em coordenadas absolutas do stage (já
+  // multiplicadas pelo scale). Por isso o clamping precisa considerar o zoom.
+  const maxRight = event.canvasWidth * SCALE * zoom
+  const maxBottom = event.canvasHeight * SCALE * zoom
+  const minSize = SCALE * zoom
 
   const stopAutoPan = useCallback(() => {
     if (autoPanRafRef.current !== null) {
@@ -128,6 +131,21 @@ export function PavilionStage({
     },
     [autoPanTick],
   )
+
+  // Auto-pan durante o resize: o Konva Transformer não expõe um onMove com a
+  // posição do cursor, então escutamos mousemove na janela enquanto o
+  // `isTransforming` está ativo. Quando termina, paramos o loop.
+  useEffect(() => {
+    if (!isTransforming) return
+    const onMouseMove = (e: MouseEvent) => {
+      handleDragCursor(e.clientX, e.clientY)
+    }
+    window.addEventListener('mousemove', onMouseMove)
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      stopAutoPan()
+    }
+  }, [isTransforming, handleDragCursor, stopAutoPan])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -249,10 +267,11 @@ export function PavilionStage({
             anchorStroke={brandColor}
             anchorFill={surfaceColor}
             boundBoxFunc={(oldBox, newBox) => {
-              const minSize = SCALE
               // Sem snap aqui — cursor segue livre durante o drag. O snap em grid
               // acontece no `onTransformEnd`. Aqui só fazemos clamping mínimo,
               // ancorando ao lado oposto da mão do usuário para evitar pulos.
+              // Todas as coordenadas são absolutas (já incluem zoom); por isso
+              // `minSize`, `maxRight` e `maxBottom` são multiplicados pelo zoom.
               if (newBox.width < minSize) {
                 if (Math.abs(newBox.x - oldBox.x) > 0.5) {
                   // Usuário arrasta lado oeste — preserva borda leste

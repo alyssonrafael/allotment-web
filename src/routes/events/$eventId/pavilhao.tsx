@@ -259,6 +259,18 @@ function PavilionEditorScreen() {
             // reversíveis sem recriar) — limpa o stack.
             clearHistory()
             setSelected(created.id)
+            // Garante que o novo stand fique visível, mesmo com zoom aplicado
+            // ou a viewport rolada para outra parte do canvas.
+            const wrap = scrollWrapRef.current
+            if (wrap) {
+              const cxMeters = slot.x + w / 2
+              const cyMeters = slot.y + h / 2
+              wrap.scrollTo({
+                left: cxMeters * pixelsPerMeter - wrap.clientWidth / 2 + CANVAS_PADDING,
+                top: cyMeters * pixelsPerMeter - wrap.clientHeight / 2 + CANVAS_PADDING,
+                behavior: 'smooth',
+              })
+            }
             toast.success(`Stand ${created.code} adicionado (${w}×${h}m)`)
           },
           onError: () => toast.error('Não foi possível adicionar o stand'),
@@ -274,6 +286,7 @@ function PavilionEditorScreen() {
       dirtyIds,
       cancelAutosave,
       flushDirty,
+      pixelsPerMeter,
     ],
   )
 

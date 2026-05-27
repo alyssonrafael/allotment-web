@@ -5,6 +5,8 @@ import { z } from 'zod'
 import { toast } from 'sonner'
 import { CalendarDays, Loader2, Maximize2 } from 'lucide-react'
 import { useNavigate } from '@tanstack/react-router'
+import { format, parse } from 'date-fns'
+import { ptBR } from 'date-fns/locale'
 import { cn } from '#/lib/utils'
 import { EVENT_TYPES } from '#/lib/constants'
 import type { EventType } from '#/types'
@@ -19,7 +21,24 @@ import {
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
+import { Calendar } from '#/components/ui/calendar'
+import { Popover, PopoverContent, PopoverTrigger } from '#/components/ui/popover'
 import { useCreateEvent } from '#/hooks/useEvents'
+
+function parseDateISO(value: string): Date | undefined {
+  if (!value) return undefined
+  const d = parse(value, 'yyyy-MM-dd', new Date())
+  return isNaN(d.getTime()) ? undefined : d
+}
+
+function formatDateISO(date: Date | undefined): string {
+  return date ? format(date, 'yyyy-MM-dd') : ''
+}
+
+function formatDateBR(value: string): string {
+  const d = parseDateISO(value)
+  return d ? format(d, "dd 'de' MMMM, yyyy", { locale: ptBR }) : ''
+}
 
 const dateRegex = /^\d{4}-\d{2}-\d{2}$/
 
@@ -205,11 +224,11 @@ export function CreateEventDialog({
               <Label htmlFor="event-start">
                 <CalendarDays size={14} className="inline" /> Início
               </Label>
-              <Input
-                id="event-start"
-                type="date"
-                {...form.register('startDate')}
-                aria-invalid={Boolean(errors.startDate)}
+              <DatePickerField
+                value={form.watch('startDate')}
+                onChange={(iso) => form.setValue('startDate', iso, { shouldValidate: true })}
+                invalid={Boolean(errors.startDate)}
+                placeholder="Selecionar data"
               />
               {errors.startDate && (
                 <p className="text-[12px] text-status-erro-text">{errors.startDate.message}</p>
@@ -219,11 +238,12 @@ export function CreateEventDialog({
               <Label htmlFor="event-end">
                 <CalendarDays size={14} className="inline" /> Término
               </Label>
-              <Input
-                id="event-end"
-                type="date"
-                {...form.register('endDate')}
-                aria-invalid={Boolean(errors.endDate)}
+              <DatePickerField
+                value={form.watch('endDate')}
+                onChange={(iso) => form.setValue('endDate', iso, { shouldValidate: true })}
+                invalid={Boolean(errors.endDate)}
+                placeholder="Selecionar data"
+                minDate={parseDateISO(form.watch('startDate'))}
               />
               {errors.endDate && (
                 <p className="text-[12px] text-status-erro-text">{errors.endDate.message}</p>
@@ -334,5 +354,63 @@ export function CreateEventDialog({
         </form>
       </DialogContent>
     </Dialog>
+  )
+}
+
+interface DatePickerFieldProps {
+  value: string
+  onChange: (iso: string) => void
+  invalid?: boolean
+  placeholder?: string
+  minDate?: Date
+}
+
+function DatePickerField({
+  value,
+  onChange,
+  invalid,
+  placeholder = 'Selecionar data',
+  minDate,
+}: DatePickerFieldProps) {
+  const [open, setOpen] = useState(false)
+  const selected = parseDateISO(value)
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-invalid={invalid}
+          className={cn(
+            'inline-flex h-9 w-full items-center justify-between rounded-md border bg-transparent px-3 py-1 text-[13px] shadow-xs transition-colors',
+            'hover:bg-surface-2',
+            'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none',
+            invalid
+              ? 'border-status-erro text-status-erro-text'
+              : 'border-border text-fg',
+            !selected && 'text-fg-subtle',
+          )}
+        >
+          <span className="truncate">
+            {selected ? formatDateBR(value) : placeholder}
+          </span>
+          <CalendarDays size={14} className="ml-2 shrink-0 opacity-70" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <Calendar
+          mode="single"
+          locale={ptBR}
+          selected={selected}
+          defaultMonth={selected ?? minDate}
+          captionLayout="dropdown"
+          disabled={minDate ? { before: minDate } : undefined}
+          onSelect={(date) => {
+            onChange(formatDateISO(date))
+            if (date) setOpen(false)
+          }}
+        />
+      </PopoverContent>
+    </Popover>
   )
 }
