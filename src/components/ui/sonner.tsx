@@ -26,16 +26,19 @@ const Toaster = ({ ...props }: ToasterProps) => {
       }}
       style={
         {
+          // Background usa color-mix com surface para ficar sólido (não translúcido)
+          // — funciona bem em ambos os temas. No dark mode, surface é escuro e o
+          // tint mantém boa legibilidade.
           '--normal-bg': 'var(--surface)',
           '--normal-text': 'var(--fg)',
           '--normal-border': 'var(--border-color)',
-          '--success-bg': 'var(--status-livre-50)',
+          '--success-bg': 'color-mix(in srgb, var(--status-livre) 22%, var(--surface))',
           '--success-text': 'var(--status-livre-text)',
           '--success-border': 'var(--status-livre)',
-          '--error-bg': 'var(--status-erro-50)',
+          '--error-bg': 'color-mix(in srgb, var(--status-erro) 22%, var(--surface))',
           '--error-text': 'var(--status-erro-text)',
           '--error-border': 'var(--status-erro)',
-          '--warning-bg': 'var(--status-reservado-50)',
+          '--warning-bg': 'color-mix(in srgb, var(--status-reservado) 22%, var(--surface))',
           '--warning-text': 'var(--status-reservado-text)',
           '--warning-border': 'var(--status-reservado)',
           '--info-bg': 'var(--surface-2)',

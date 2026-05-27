@@ -61,16 +61,7 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { keys: ['G', 'C'], label: 'Ir para Comercial',  icon: Filter },
       { keys: ['G', 'F'], label: 'Ir para Finanças',   icon: Wallet },
     ],
-  },
-  {
-    label: 'Canvas',
-    items: [
-      { keys: ['Ctrl', 'Z'],  label: 'Desfazer',            icon: Undo2 },
-      { keys: ['Ctrl', 'A'],  label: 'Selecionar todos',     icon: MousePointerClick },
-      { keys: ['Esc'],        label: 'Limpar seleção',       icon: X },
-      { keys: ['Del'],        label: 'Excluir selecionados', icon: Trash2 },
-    ],
-  },
+  }
 ]
 
 // Atalho do dia — rotação determinística por dia do calendário

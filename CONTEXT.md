@@ -324,12 +324,60 @@ export function snapToGrid(value: number, gridSize = GRID_SIZE): number {
 }
 ```
 
-### 7.3 Fluxo de drag/resize (Konva `onDragEnd` / `onTransformEnd`)
+### 7.3 Fluxo de drag (`onDragEnd`)
 
-1. Snap: `snapToGrid(x, GRID_SIZE)`, `snapToGrid(y, GRID_SIZE)`
-2. `isOutOfBounds` → revert se verdadeiro
-3. `detectOverlap` contra todos os outros stands → revert se colisão
-4. Se válido → `PATCH /allotments/:id/position` (somente x/y; mais leve que PUT)
+1. `isOutOfBounds` → reverte nó Konva se verdadeiro; chama `onInvalidMove('bounds')`
+2. `detectOverlap` contra todos os outros stands → reverte se colisão; chama `onInvalidMove('overlap')`
+3. Se válido → `onPositionCommit(id, x, y)` → `PATCH /allotments/:id/position` (somente x/y)
+
+### 7.4 Fluxo de resize (`onTransformEnd`)
+
+1. Lê `node.scaleX/scaleY`, reseta escalas para 1
+2. **Snap apenas aqui** — `Math.round(value / SCALE) * SCALE` para `x`, `y`, `width`, `height`
+3. `isOutOfBounds` → reverte se verdadeiro
+4. `detectOverlap` → reverte se colisão
+5. Se válido → `onTransformCommit(id, { x, y, width, height })`
+
+**NUNCA** fazer snap dentro do `boundBoxFunc` — causa pulo no lado oposto à âncora. O `boundBoxFunc` só impõe tamanho mínimo (`SCALE=50px`) e clamping contra os limites do canvas.
+
+### 7.5 Seleção — single-select only
+
+Multi-select foi removido. `selectedIds` sempre tem 0 ou 1 elemento. O `handleSelect` ignora o parâmetro `shift`. Não há `Ctrl+A` / seleção múltipla.
+
+### 7.6 Labels durante resize
+
+`isTransforming` state em `PavilionStage` ativa a prop `hideLabels` no `AllotmentNode` durante `onTransformStart` → `onTransformEnd`. Quando `hideLabels=true`, o stand renderiza apenas fundo + stripe + anel de seleção (sem código, nome, dimensões, preço) para evitar deformação causada pelo `scaleX/scaleY` do Konva Group.
+
+### 7.7 Auto-pan durante drag
+
+Loop `requestAnimationFrame` ativo enquanto o cursor está dentro de 40px de qualquer borda do scroll wrap. Velocidade: 14px/frame. Implementado em `PavilionStage`:
+- `autoPanRafRef: useRef<number | null>` — handle do rAF
+- `lastCursorRef: useRef<{x, y} | null>` — posição DOM atual do cursor
+- Inicia via callback `onDragCursor(clientX, clientY)` do `AllotmentNode`
+- Para em `onDragEnd`
+
+### 7.8 Transformer — cores
+
+Konva não interpreta strings `var(--token)`. As cores do `<Transformer>` **devem** ser valores resolvidos (hex/rgb). Usar `useCssTokens(['--brand-primary', '--surface'])` e passar os valores retornados a `borderStroke`/`anchorStroke`/`anchorFill`.
+
+### 7.9 Inserção de stand (`handleInsert`)
+
+- Se `dirtyIds.length > 0` → `toast.error('Salve as alterações pendentes...', { action: { label: 'Salvar agora', onClick: handleSaveNow } })` e retorna sem inserir
+- Botões de preset ficam com `opacity-50` visualmente quando bloqueados, mas sem atributo `disabled` HTML (para o click chegar ao handler e mostrar o toast)
+- Localiza o primeiro espaço livre via `findFreeSlot` em `src/lib/allotmentInsert.ts`
+- Após inserção bem-sucedida: `clearHistory()` (ID novo não pode ser desfeito) + `setSelected(novoId)`
+
+### 7.10 Exclusão com confirmação (AlertDialog)
+
+Del/Backspace aciona `setPendingDeleteIds([...selectedIds])`. Um `<AlertDialog>` aguarda confirmação antes de executar a exclusão. Cancelar limpa `pendingDeleteIds` sem deletar nada.
+
+### 7.11 Painel `AllotmentPanel` — validação
+
+Antes de aplicar alterações de largura/altura via inputs, valida:
+1. `isOutOfBounds(candidate, event)`
+2. `detectOverlap(candidate, outroStand)` para cada stand diferente
+
+Se inválido → `toast.error(...)`, retorna sem chamar `onChange`. `onBlur` restaura o input ao valor real de `allotment.width`/`height` se divergirem. O painel recebe `allotments: Array<Allotment>` para realizar essa checagem.
 
 ---
 
@@ -498,7 +546,7 @@ hero: 28px → cards de destaque
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│ Sidebar (240px fixo)  │ Header (sticky 72px)             │
+│ Sidebar (240px fixo)  │ Header (sticky 56px — h-14)      │
 │                       ├──────────────────────────────────┤
 │  Logo + versão        │                                  │
 │  Nav: 5 telas         │  Conteúdo (max-width 1500px)     │
@@ -507,6 +555,22 @@ hero: 28px → cards de destaque
 │  Avatar + ThemeToggle │                                  │
 └──────────────────────────────────────────────────────────┘
 ```
+
+O header tem **uma única linha** (breadcrumb + ações + ThemeToggle). Não há H1 de página nem SaveIndicator — ambos foram removidos.
+
+### Layout do editor de pavilhão (`/events/$eventId/pavilhao`)
+
+O editor ocupa `h-[calc(100vh-72px)]` com margens `-mx-5 -my-4`:
+- `72px` = header `56px` + resíduo de `16px` do padding do `main` (`py-6=48px` − `-my-4=32px`)
+
+Estrutura interna:
+```
+div.flex.gap-3 (h-full)
+  ├── div (flex-1, overflow-auto, scroll wrap do canvas)  ← contém PavilionStage + MiniMap overlay
+  └── AllotmentPanel (w-fixed, h-full, rounded-2xl border)
+```
+
+`AllotmentPanel` é irmão direto do scroll wrap no mesmo flex row — nunca aninhado em coluna separada. Isso garante que o painel tenha exatamente a mesma altura que a área de canvas.
 
 ### shadcn/ui instalados
 
@@ -522,16 +586,19 @@ hero: 28px → cards de destaque
 
 ```ts
 interface CanvasStore {
-  selectedId:  string | null
-  selectedIds: string[]
-  zoom:        number
-  snapEnabled: boolean
-  setSelected:    (id: string | null) => void
-  toggleSelected: (id: string) => void
-  clearSelection: () => void
-  setZoom:        (z: number) => void
-  toggleSnap:     () => void
+  selectedId:      string | null
+  selectedIds:     string[]        // sempre 0 ou 1 item (single-select only)
+  zoom:            number
+  autosaveEnabled: boolean
+  dirtyIds:        string[]        // IDs com alterações não salvas
+  setSelected:     (id: string | null) => void
+  clearSelection:  () => void
+  setZoom:         (z: number) => void
+  toggleAutosave:  () => void
+  markDirty:       (id: string) => void
+  clearDirty:      (ids: string[]) => void
 }
+// toggleSelected e snapEnabled foram removidos
 ```
 
 ### uiStore.ts
@@ -550,7 +617,7 @@ interface UIStore {
 // getInitialTheme() lê localStorage; padrão: 'light'
 ```
 
-### historyStore.ts (stub — sprint futuro)
+### historyStore.ts
 
 ```ts
 interface HistoryStore {
@@ -562,6 +629,9 @@ interface HistoryStore {
   clear:  () => void
 }
 // max 50 estados no passado
+// IMPORTANTE: clear() é chamado ao inserir um novo stand — o ID novo
+// não pode ser desfeito de forma confiável; a pilha é zerada após cada insert.
+// O histórico também é zerado ao trocar de evento.
 ```
 
 ---
@@ -587,6 +657,17 @@ interface HistoryStore {
 
 ## 15. Atalhos de teclado
 
+Teclas modificadoras variam por plataforma — detectadas via `src/lib/platform.ts`:
+```ts
+// SSR-safe: retorna false no servidor; consumidores usam useEffect após mount
+export const isMac    = /Mac|iPhone|iPod|iPad/i.test(...)
+export const MOD_KEY  = isMac ? '⌘' : 'Ctrl'
+export const SHIFT_KEY = isMac ? '⇧' : 'Shift'
+export const ALT_KEY  = isMac ? '⌥' : 'Alt'
+```
+
+### Atalhos globais
+
 | Atalho | Ação |
 |---|---|
 | `G` + `D` | Navegar para Dashboard |
@@ -594,16 +675,83 @@ interface HistoryStore {
 | `G` + `S` | Navegar para Stands |
 | `G` + `C` | Navegar para Comercial |
 | `G` + `F` | Navegar para Finanças |
-| `Ctrl/⌘ + Z` | Desfazer (undo) |
-| `Ctrl/⌘ + Shift + Z` / `Ctrl/⌘ + Y` | Refazer (redo) |
-| `Ctrl/⌘ + A` | Selecionar todos (canvas) |
-| `Shift + Click` | Adicionar/remover da seleção |
 | `Esc` | Limpar seleção |
-| `Delete` / `Backspace` | Excluir selecionados |
+
+### Atalhos do editor de pavilhão (`usePavilionHotkeys`)
+
+| Atalho | Ação |
+|---|---|
+| `Ctrl/⌘ + Z` | Desfazer (undo) |
+| `Ctrl/⌘ + Shift + Z` | Refazer (redo) |
+| `Delete` / `Backspace` | Abre AlertDialog de confirmação antes de excluir |
+| `+` / `=` | Aumentar zoom |
+| `-` / `_` | Diminuir zoom |
+| `N` | Salvar agora (flush manual) |
+
+**Removidos:** `Ctrl/⌘ + A` (selecionar todos) e `Shift + Click` (multi-seleção) — o editor é single-select apenas.
 
 ---
 
-## 16. Convenções de código
+## 16. Editor de pavilhão — componentes
+
+### `src/components/canvas/PavilionStage.tsx`
+- Renderiza Konva `<Stage><Layer>` com `<Grid>`, `<AllotmentNode[]>`, `<Transformer>`
+- Recebe `scrollWrapRef` para auto-pan
+- Gerencia: `collisionIds[]`, `isTransforming`, auto-pan RAF loop
+- Transformer: `rotateEnabled={false}`, `keepRatio={false}`, `anchorSize=10`. Cores via `useCssTokens`
+- `boundBoxFunc`: sem snap — apenas min-size e clamping. Snap só em `onTransformEnd`
+
+### `src/components/canvas/AllotmentNode.tsx`
+- Konva Group com: `Rect` de fundo (gradiente por status), stripe top 3px, code badge, nome, dimensões, preço
+- Props: `allotment`, `isSelected`, `isCollision`, `hideLabels`, `draggable`, `onSelect`, `onDragStart`, `onDragCursor`, `onDragMove`, `onDragEnd`
+- `hideLabels=true` → renderiza só fundo + stripe + anel de seleção
+- `onDragCursor(clientX, clientY)` → alimenta auto-pan em PavilionStage
+
+### `src/components/canvas/Grid.tsx`
+- Linhas finas a cada 1m + linhas grossas a cada 5m + borda do canvas
+- Borda: `--border-strong`, `strokeWidth=2`, `cornerRadius=8` — neutro, sem azul
+- Cores via `useCssTokens(['--border-color', '--border-strong', '--surface-2'])`
+
+### `src/components/canvas/MiniMap.tsx`
+- SVG ~100px largura, posicionado `absolute bottom-3 right-3`
+- Click em rect de stand → `setSelected(id)` + scroll suave para centralizar
+- Drag em área vazia → pan instantâneo (`scrollLeft/scrollTop = ...`, sem smooth)
+- `onCenterOn` (smooth) vs `onPan` (instantâneo) — callbacks distintas para os dois casos
+
+### `src/components/canvas/StandTipsBar.tsx`
+- Rodapé do editor: tips inline (Clique, Arrastar, `⌘/Ctrl+Z`, Del) + botão `Ajuda`
+- Dialog `sm:max-w-3xl` (necessário para sobrepor o `sm:max-w-lg` do shadcn)
+- Seção "Como funciona": 5 parágrafos sobre fluxo do editor
+- Seção "Atalhos": grid 3 colunas (Canvas / Edição / Vista), teclas platform-aware
+- Seção "Histórico": explicação undo/redo + warning amber sobre reset ao inserir
+
+### `src/components/allotments/AllotmentPanel.tsx`
+- Painel lateral com inputs para nome, largura, altura, status (4 botões), preço
+- `onChange(diff)` → live preview no canvas a cada keystroke
+- `onSaveNow()` → cancelAutosave + flushDirty
+- Valida overlap + bounds antes de aplicar diff de tamanho (com toast 1.5s debounce)
+- `onBlur` em inputs de tamanho restaura ao valor real se difs
+
+### `src/lib/allotmentInsert.ts`
+- `findFreeSlot(width, height, event, existing)` → varredura top-left, retorna `{x,y}|null`
+- `generateCode(existing)` → `A-01`, `A-02`… letra muda a cada 3 stands (A–F)
+
+### `src/lib/platform.ts`
+- `isMac: boolean` — SSR-safe
+- `MOD_KEY`, `SHIFT_KEY`, `ALT_KEY` — símbolos por plataforma
+- Consumidores usam `useEffect(() => setIsMacClient(isMac), [])` para evitar hydration mismatch
+
+### `src/hooks/usePavilionHotkeys.ts`
+- Callbacks: `onUndo`, `onRedo`, `onDelete`, `onSave`, `onZoomIn`, `onZoomOut`
+- `onDelete` → abre AlertDialog (não deleta diretamente)
+- Ignorado quando foco está em INPUT/TEXTAREA
+
+### `src/hooks/useAutosave.ts`
+- `schedule(id)` → debounce 2000ms, chama `flushDirty`
+- `cancel()` → limpa timer (não reverte alterações)
+- `isPending: boolean` → true quando timer está rodando
+
+## 17. Convenções de código
 
 - Um componente por arquivo, nomes PascalCase.
 - Hooks em `src/hooks/` com prefixo `use`.
@@ -617,3 +765,4 @@ interface HistoryStore {
 - `EventStatus` é **retornado** pelo backend como campo computado — nunca enviar no body de criação/atualização.
 - Endereço de venue em campos planos diretamente no `Venue` (`city`, `state`, `street`, etc.); usar `formatVenueAddress(venue, mode)` para exibição.
 - `EventType` sempre em **MAIÚSCULAS** (`'FEIRA' | 'CONGRESSO' | 'EXPO' | 'CORPORATE'`) — valor que a API aceita e retorna.
+- Backgrounds de toast de status usam `color-mix(in srgb, var(--status-X) 22%, var(--surface))` — **não** `var(--status-X-50)` (que é rgba com alpha baixo, fica translúcido no dark mode).

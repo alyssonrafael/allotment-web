@@ -82,11 +82,29 @@ x + width  <= event.canvasWidth
 y + height <= event.canvasHeight
 ```
 
-**On drag/resize end (Konva `onDragEnd` / `onTransformEnd`):**
-1. Snap coordinates: `snapToGrid(value, GRID_SIZE)` — `GRID_SIZE = 1 m`
-2. Check `isOutOfBounds(allotment, event)` → revert if true
-3. Check `detectOverlap(a, b)` against every other allotment → revert on any hit
-4. If valid → `PATCH /allotments/:id/position` mutation (not PUT — faster, only x/y)
+**On drag end (`onDragEnd`):**
+1. Check `isOutOfBounds` → revert Konva node + `onInvalidMove('bounds')` if true
+2. Check `detectOverlap` against every other allotment → revert + `onInvalidMove('overlap')` if hit
+3. If valid → `onPositionCommit(id, x, y)` → `PATCH /allotments/:id/position` (not PUT)
+
+**On resize end (`onTransformEnd`):**
+1. Read `node.scaleX/scaleY`, reset scales to 1, compute new `width`/`height`/`x`/`y`
+2. Snap: `Math.round(value / SCALE) * SCALE` — only at `onTransformEnd`, NEVER during drag (no snap in `boundBoxFunc`)
+3. Check `isOutOfBounds` → revert if true
+4. Check `detectOverlap` → revert if hit
+5. If valid → `onTransformCommit(id, { x, y, width, height })`
+
+**During resize (`boundBoxFunc`):** cursor follows freely — only enforces minimum size (SCALE=50px) and canvas bounds clamping. No grid snap here.
+
+**Labels hidden during resize:** `isTransforming` state in PavilionStage drives `hideLabels` prop on AllotmentNode. When `true`, renders only background + top stripe + selection ring (avoids text deformation from Konva scaleX/Y on Group).
+
+**Konva Transformer colors:** must be resolved hex/rgb values — Konva cannot parse CSS `var(...)` strings. Always read colors via `useCssTokens(['--brand-primary', '--surface'])` and pass resolved values to `borderStroke`/`anchorStroke`/`anchorFill`.
+
+**Auto-pan during drag:** `requestAnimationFrame` loop with 40px dead zone, 14px/frame speed. Reads cursor position via `onDragCursor` callback (reports `clientX/clientY`). Loop starts on first `onDragCursor` call, stops on `onDragEnd`. Implemented in `PavilionStage` with `autoPanRafRef` + `lastCursorRef`.
+
+**Single-select only:** multi-select is entirely removed. `handleSelect` ignores the `shift` parameter. `Shift+Click` does nothing special. No `Ctrl+A` / select-all. `selectedIds` array always has 0 or 1 items.
+
+**Grid border:** uses neutral `--border-strong` (strokeWidth=2), no brand-primary blue.
 
 The pure functions (`collision.ts`, `constants.ts`) must stay free of React imports.
 
@@ -148,7 +166,8 @@ Each status has three variants: `--status-{x}` (solid), `--status-{x}-50` (soft 
 - All shadcn components live in `src/components/ui/` — do not edit manually; customise via variants. **Exception:** `tooltip.tsx` was adapted to use project tokens (`bg-card`, `text-fg`, `border-border`) instead of the shadcn default inverted colors.
 - Use `cn()` (clsx + tailwind-merge) for all conditional class logic.
 - CSS tokens are in `src/styles.css` with `@theme inline` mapping them to Tailwind utilities.
-- Sidebar: 240 px fixed. Header: sticky 72 px. Content max-width: 1500 px centred.
+- Sidebar: 240 px fixed. Header: sticky **56 px** (`h-14`). Content max-width: 1500 px centred.
+- Sonner toast backgrounds: use `color-mix(in srgb, var(--status-X) 22%, var(--surface))` (NOT `var(--status-X-50)`) to ensure opacity in dark mode.
 
 ## Code conventions
 
@@ -159,3 +178,25 @@ Each status has three variants: `--status-{x}` (solid), `--status-{x}-50` (soft 
 - `useMutation` for all write operations.
 - Keyboard shortcuts managed via `react-hotkeys-hook` (G+D/P/S/C/F navigate, Ctrl+Z undo, Esc deselect, Del/Backspace delete).
 - `useEffect` deps must not include objects that change every render (e.g. full `useMutation` return value) — use stable refs or handle side-effects in event handlers.
+
+## Pavilhão editor: layout & behavior
+
+**Height:** the editor div uses `h-[calc(100vh-72px)]` with `-mx-5 -my-4`. Math: header 56px + residual 16px from `main`'s `py-6` (48px) minus `-my-4` (32px) = 72px total to subtract.
+
+**Layout structure:** outer `flex gap-3` row contains (1) canvas scroll wrap + MiniMap overlay, (2) `<AllotmentPanel>` as sibling. This gives the panel the same height as the canvas area without an extra container. Panel uses `rounded-2xl border border-border` (not `border-l`).
+
+**AllotmentPanel validation:** before applying width/height changes from inputs, validates `isOutOfBounds` + `detectOverlap` against all other allotments. If invalid → `toast.error(...)` and returns without applying the diff. `onBlur` restores the input to the actual `allotment.width/height` if they diverge. Receives `allotments: Array<Allotment>` prop for this check.
+
+**Insert flow (`handleInsert`):** if `dirtyIds.length > 0`, shows `toast.error('Salve as alterações pendentes...', { action: { label: 'Salvar agora', onClick: handleSaveNow } })` and returns early. Preset buttons have visual `opacity-50` when blocked, but the HTML `disabled` attribute is only set for hard failures (no event / mutation in progress), so the click always reaches the handler for the dirty-check toast.
+
+**Delete confirmation:** Del/Backspace hotkey sets `pendingDeleteIds` state (instead of deleting directly). An `<AlertDialog>` renders and on confirm calls the actual delete logic. Cancelling clears `pendingDeleteIds`.
+
+**Save toast:** `flushDirty` dispatches `toast.success` after a successful batch save.
+
+**Platform detection (`src/lib/platform.ts`):** `isMac` is SSR-safe (`typeof navigator !== 'undefined'` guard). Consumers must use `useEffect` to read it after mount to avoid hydration mismatch:
+```ts
+const [isMacClient, setIsMacClient] = useState(false)
+useEffect(() => { setIsMacClient(isMac) }, [])
+```
+
+**Help modal (`StandTipsBar`):** button shows `<HelpCircle> Ajuda`. Dialog uses `sm:max-w-3xl` (must include `sm:` prefix to override shadcn's built-in `sm:max-w-lg`). Three sections: "Como funciona", "Atalhos" (platform-aware keys, 3-column grid: Canvas / Edição / Vista), "Histórico" (amber warning: inserting a new stand clears undo history).
