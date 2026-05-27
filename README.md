@@ -1,213 +1,148 @@
-Welcome to your new TanStack Start app! 
+# Allotment Manager — Frontend
 
-# Getting Started
+Sistema web para gerenciamento visual de stands em pavilhões de eventos. Permite posicionar, redimensionar e editar stands via canvas interativo (drag & drop), com telas complementares de gestão comercial, financeira e tabular.
 
-To run this application:
+---
+
+## Stack
+
+| Camada | Tecnologia |
+|---|---|
+| Framework UI | React 18 + TypeScript |
+| Meta-framework | TanStack Start (SSR) |
+| Roteamento | TanStack Router (file-based) |
+| Server state | TanStack Query |
+| Estado global | Zustand |
+| Canvas | react-konva / Konva.js |
+| UI components | shadcn/ui (new-york, zinc) |
+| Estilo | Tailwind CSS v4 + tokens CSS |
+| HTTP client | axios |
+| Forms | react-hook-form + zod |
+| Ícones | lucide-react |
+| Toasts | sonner |
+| Atalhos | react-hotkeys-hook |
+| Gráficos | recharts |
+| DnD (kanban) | @dnd-kit/core |
+| Backend | NestJS — `http://localhost:3333/api/v1` |
+
+---
+
+## Pré-requisitos
+
+- Node.js 20+
+- Backend rodando em `localhost:3333` (NestJS separado)
+- Arquivo `.env` com as variáveis de ambiente (veja abaixo)
+
+---
+
+## Variáveis de ambiente
+
+Crie um arquivo `.env` na raiz com:
+
+```env
+VITE_API_URL=http://localhost:3333
+VITE_API_PREFIX=/api/v1
+```
+
+---
+
+## Instalação e execução
 
 ```bash
 npm install
-npm run dev
+npm run dev        # dev server em http://localhost:3000
 ```
 
-# Building For Production
-
-To build this application for production:
+### Outros comandos
 
 ```bash
-npm run build
+npm run build      # build de produção
+npm run test       # testes com Vitest (single pass)
+npm run lint       # ESLint
+npm run format     # Prettier --write + ESLint --fix
+npm run check      # Prettier --check
+
+# Adicionar componente shadcn/ui
+npx shadcn@latest add <componente>
 ```
 
-## Testing
+---
 
-This project uses [Vitest](https://vitest.dev/) for testing. You can run the tests with:
+## Estrutura de pastas
 
-```bash
-npm run test
+```
+src/
+  api/             ← cliente axios + funções por recurso (venues, events, allotments)
+  components/
+    ui/            ← componentes shadcn/ui (não editar manualmente)
+    canvas/        ← PavilionStage, AllotmentNode, MiniMap, Grid, StandTipsBar
+    allotments/    ← AllotmentPanel, AllotmentForm
+    events/        ← EventCard, CreateEventDialog
+    layout/        ← AppShell, Sidebar, Header, EventSelector
+    shared/        ← StatusBadge, ThemeToggle, KPI
+  hooks/           ← useVenues, useEvents, useAllotments, useAutosave,
+                     useCssTokens, usePavilionHotkeys, useThemeTransition,
+                     useGlobalHotkeys
+  stores/          ← canvasStore.ts, historyStore.ts, uiStore.ts
+  types/           ← index.ts (todos os tipos TypeScript do domínio)
+  lib/             ← utils.ts (cn), collision.ts, constants.ts, format.ts,
+                     allotmentInsert.ts, platform.ts
+  routes/          ← rotas file-based (TanStack Router)
+  styles.css       ← tokens CSS globais + utilities Tailwind
 ```
 
-## Styling
+---
 
-This project uses [Tailwind CSS](https://tailwindcss.com/) for styling.
+## Hierarquia de domínio
 
-### Removing Tailwind CSS
-
-If you prefer not to use Tailwind CSS:
-
-1. Remove the demo pages in `src/routes/demo/`
-2. Replace the Tailwind import in `src/styles.css` with your own styles
-3. Remove `tailwindcss()` from the plugins array in `vite.config.ts`
-4. Uninstall the packages: `npm install @tailwindcss/vite tailwindcss -D`
-
-## Linting & Formatting
-
-
-This project uses [eslint](https://eslint.org/) and [prettier](https://prettier.io/) for linting and formatting. Eslint is configured using [tanstack/eslint-config](https://tanstack.com/config/latest/docs/eslint). The following scripts are available:
-
-```bash
-npm run lint
-npm run format
-npm run check
+```
+Venue (Pavilhão físico)
+  └── Event (Evento / feira)
+        └── Allotment (Stand posicionado no canvas)
 ```
 
+---
 
-## Shadcn
+## Telas
 
-Add components using the latest version of [Shadcn](https://ui.shadcn.com/).
+| Rota | Tela |
+|---|---|
+| `/events` | Hub de pavilhões — lista venues com eventos agrupados |
+| `/events/$eventId/dashboard` | KPIs, donut de status, heatmap, atividade recente |
+| `/events/$eventId/pavilhao` | Editor visual interativo (canvas drag/resize) |
+| `/events/$eventId/stands` | Tabela com filtros, edição inline e exclusão |
+| `/events/$eventId/comercial` | Kanban por status de stand |
+| `/events/$eventId/financas` | Receita por status, distribuição de área, tabela de contribuição |
 
-```bash
-pnpm dlx shadcn@latest add button
-```
+### Editor de pavilhão (`/pavilhao`)
 
+- **Canvas Konva** com grid 1m, snap ao soltar, colisão visual em tempo real
+- **Drag** com auto-pan ao aproximar das bordas
+- **Resize** via Transformer (alças nos cantos); labels ocultados durante o resize
+- **Painel lateral** com edição de nome, dimensões, status e preço (live preview)
+- **Autosave** configurável (2s após parar de mexer) ou manual (`N`)
+- **Undo/Redo** (`Ctrl/⌘+Z` / `Ctrl/⌘+Shift+Z`); histórico é zerado ao inserir stand novo
+- **Mini-mapa** SVG interativo para navegação e pan
+- **Presets de inserção** (3×3m, 4×3m…) com detecção de espaço livre
+- Aceita `?standId=` para pré-selecionar um stand ao abrir
 
+---
 
-## Routing
+## Atalhos de teclado
 
-This project uses [TanStack Router](https://tanstack.com/router) with file-based routing. Routes are managed as files in `src/routes`.
+| Atalho | Ação |
+|---|---|
+| `G` + `D/P/S/C/F` | Navegar entre telas |
+| `Esc` | Limpar seleção |
+| `Ctrl/⌘ + Z` | Desfazer |
+| `Ctrl/⌘ + Shift + Z` | Refazer |
+| `Delete` / `Backspace` | Excluir stand (com confirmação) |
+| `+` / `-` | Zoom in / out no canvas |
+| `N` | Salvar agora (flush manual) |
 
-### Adding A Route
+---
 
-To add a new route to your application just add a new file in the `./src/routes` directory.
+## Documentação técnica
 
-TanStack will automatically generate the content of the route file for you.
-
-Now that you have two routes you can use a `Link` component to navigate between them.
-
-### Adding Links
-
-To use SPA (Single Page Application) navigation you will need to import the `Link` component from `@tanstack/react-router`.
-
-```tsx
-import { Link } from "@tanstack/react-router";
-```
-
-Then anywhere in your JSX you can use it like so:
-
-```tsx
-<Link to="/about">About</Link>
-```
-
-This will create a link that will navigate to the `/about` route.
-
-More information on the `Link` component can be found in the [Link documentation](https://tanstack.com/router/v1/docs/framework/react/api/router/linkComponent).
-
-### Using A Layout
-
-In the File Based Routing setup the layout is located in `src/routes/__root.tsx`. Anything you add to the root route will appear in all the routes. The route content will appear in the JSX where you render `{children}` in the `shellComponent`.
-
-Here is an example layout that includes a header:
-
-```tsx
-import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
-
-export const Route = createRootRoute({
-  head: () => ({
-    meta: [
-      { charSet: 'utf-8' },
-      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { title: 'My App' },
-    ],
-  }),
-  shellComponent: ({ children }) => (
-    <html lang="en">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        <header>
-          <nav>
-            <Link to="/">Home</Link>
-            <Link to="/about">About</Link>
-          </nav>
-        </header>
-        {children}
-        <Scripts />
-      </body>
-    </html>
-  ),
-})
-```
-
-More information on layouts can be found in the [Layouts documentation](https://tanstack.com/router/latest/docs/framework/react/guide/routing-concepts#layouts).
-
-## Server Functions
-
-TanStack Start provides server functions that allow you to write server-side code that seamlessly integrates with your client components.
-
-```tsx
-import { createServerFn } from '@tanstack/react-start'
-
-const getServerTime = createServerFn({
-  method: 'GET',
-}).handler(async () => {
-  return new Date().toISOString()
-})
-
-// Use in a component
-function MyComponent() {
-  const [time, setTime] = useState('')
-  
-  useEffect(() => {
-    getServerTime().then(setTime)
-  }, [])
-  
-  return <div>Server time: {time}</div>
-}
-```
-
-## API Routes
-
-You can create API routes by using the `server` property in your route definitions:
-
-```tsx
-import { createFileRoute } from '@tanstack/react-router'
-import { json } from '@tanstack/react-start'
-
-export const Route = createFileRoute('/api/hello')({
-  server: {
-    handlers: {
-      GET: () => json({ message: 'Hello, World!' }),
-    },
-  },
-})
-```
-
-## Data Fetching
-
-There are multiple ways to fetch data in your application. You can use TanStack Query to fetch data from a server. But you can also use the `loader` functionality built into TanStack Router to load the data for a route before it's rendered.
-
-For example:
-
-```tsx
-import { createFileRoute } from '@tanstack/react-router'
-
-export const Route = createFileRoute('/people')({
-  loader: async () => {
-    const response = await fetch('https://swapi.dev/api/people')
-    return response.json()
-  },
-  component: PeopleComponent,
-})
-
-function PeopleComponent() {
-  const data = Route.useLoaderData()
-  return (
-    <ul>
-      {data.results.map((person) => (
-        <li key={person.name}>{person.name}</li>
-      ))}
-    </ul>
-  )
-}
-```
-
-Loaders simplify your data fetching logic dramatically. Check out more information in the [Loader documentation](https://tanstack.com/router/latest/docs/framework/react/guide/data-loading#loader-parameters).
-
-# Demo files
-
-Files prefixed with `demo` can be safely deleted. They are there to provide a starting point for you to play around with the features you've installed.
-
-# Learn More
-
-You can learn more about all of the offerings from TanStack in the [TanStack documentation](https://tanstack.com).
-
-For TanStack Start specific documentation, visit [TanStack Start](https://tanstack.com/start).
+- [CLAUDE.md](CLAUDE.md) — guia para o Claude Code: convenções, regras do canvas, API
+- [CONTEXT.md](CONTEXT.md) — referência técnica completa: tipos, endpoints, design system, regras de negócio
