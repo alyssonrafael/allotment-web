@@ -12,7 +12,7 @@ export function AppShell({ actions, children }: AppShellProps) {
   useGlobalHotkeys()
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background text-fg">
+    <div className="flex h-dvh overflow-hidden bg-background text-fg">
       <div className="hidden lg:flex">
         <Sidebar />
       </div>
