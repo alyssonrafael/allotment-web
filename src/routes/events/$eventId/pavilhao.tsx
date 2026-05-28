@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import {
   CircleSlash,
   Loader2,
+  Monitor,
   Plus,
   Redo2,
   RotateCcw,
@@ -556,6 +557,15 @@ function PavilionEditorScreen() {
   )
 
   return (
+    <>
+    {/* Overlay para telas pequenas — bottom-16 deixa o BottomNav visível */}
+    <div className="fixed inset-x-0 top-0 bottom-16 z-39 flex flex-col items-center justify-center gap-4 bg-background p-8 text-center lg:hidden">
+      <Monitor size={48} className="text-brand-primary" />
+      <h2 className="text-xl font-bold text-fg">Tela muito pequena</h2>
+      <p className="max-w-xs text-sm text-fg-muted">
+        O editor de pavilhão requer uma tela maior. Continue em um computador ou expanda a janela do navegador.
+      </p>
+    </div>
     <div className="-mx-5 -my-4 flex h-[calc(100vh-72px)] overflow-hidden">
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden px-5 pt-3 pb-3">
         {/* Toolbar */}
@@ -782,6 +792,7 @@ function PavilionEditorScreen() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+    </>
   )
 }
 

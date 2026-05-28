@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, createFileRoute } from '@tanstack/react-router'
 import {
+  ArrowLeft,
   CalendarDays,
   CheckCircle2,
   ChevronRight,
@@ -61,18 +62,19 @@ function VenueDetailScreen() {
   return (
     <div className="min-h-screen bg-background text-fg">
       <header className="sticky top-0 z-10 border-b border-border bg-background/80 backdrop-blur-md">
-        <div className="mx-auto flex max-w-7xl items-center gap-3 px-8 py-5">
+        <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-4 sm:px-8 sm:py-5">
           <nav
             aria-label="Trilha"
             className="flex min-w-0 items-center gap-2"
           >
             <Link
               to="/"
-              className="shrink-0 text-h1 text-fg-muted transition-colors hover:text-fg"
+              className="flex shrink-0 items-center gap-1.5 text-h1 text-fg-muted transition-colors hover:text-fg"
             >
-              Pavilhões
+              <ArrowLeft size={18} className="sm:hidden" />
+              <span className="hidden sm:inline">Pavilhões</span>
             </Link>
-            <ChevronRight size={20} className="shrink-0 text-fg-subtle" aria-hidden />
+            <ChevronRight size={20} className="hidden shrink-0 text-fg-subtle sm:block" aria-hidden />
             <h1 className="truncate text-h1 text-fg">
               {venue?.name ?? 'Carregando…'}
             </h1>
@@ -83,7 +85,7 @@ function VenueDetailScreen() {
         </div>
       </header>
 
-      <section className="animate-in fade-in slide-in-from-bottom-3 duration-300 ease-out mx-auto max-w-7xl px-8 py-8">
+      <section className="animate-in fade-in slide-in-from-bottom-3 duration-300 ease-out mx-auto max-w-7xl px-4 py-6 sm:px-8 sm:py-8">
         {isLoading && (
           <>
             <Skeleton className="h-56 rounded-2xl" />
@@ -118,12 +120,14 @@ function VenueDetailScreen() {
               onValueChange={(value) => setTab(value as FilterValue)}
               className="mt-6"
             >
-              <TabsList variant="line">
-                <FilterTab value="all" label="Todos" count={counts.all} />
-                <FilterTab value="upcoming" label="Próximos" count={counts.upcoming} />
-                <FilterTab value="active" label="Em curso" count={counts.active} />
-                <FilterTab value="finished" label="Encerrados" count={counts.finished} />
-              </TabsList>
+              <div className="overflow-x-auto overflow-y-hidden">
+                <TabsList variant="line">
+                  <FilterTab value="all" label="Todos" count={counts.all} />
+                  <FilterTab value="upcoming" label="Próximos" count={counts.upcoming} />
+                  <FilterTab value="active" label="Em curso" count={counts.active} />
+                  <FilterTab value="finished" label="Encerrados" count={counts.finished} />
+                </TabsList>
+              </div>
 
               <TabsContent value={tab} className="mt-5">
                 <EventList events={filteredEvents} filter={tab} />

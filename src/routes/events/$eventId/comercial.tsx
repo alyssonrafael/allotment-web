@@ -3,7 +3,8 @@ import { useState } from 'react'
 import {
   DndContext,
   DragOverlay,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useDraggable,
   useDroppable,
   useSensor,
@@ -105,7 +106,8 @@ function ComercialScreen() {
   const activeItem = list.find((a) => a.id === activeId) ?? null
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
   )
 
   const sold = list.filter((a) => a.status === 'SOLD')
@@ -156,8 +158,8 @@ function ComercialScreen() {
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className="animate-in fade-in slide-in-from-bottom-3 duration-300 ease-out flex flex-col gap-4">
         {/* Metrics bar */}
-        <div className="flex items-center justify-between rounded-xl border border-border bg-surface px-6 py-4">
-          <div className="flex items-center gap-8">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface px-4 py-4 sm:px-6">
+          <div className="flex items-center gap-4 sm:gap-8">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-widest text-fg-subtle">
                 Faturamento
@@ -185,7 +187,7 @@ function ComercialScreen() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 text-[12px] text-fg-subtle">
+          <div className="hidden items-center gap-1.5 text-[12px] text-fg-subtle sm:flex">
             <ArrowLeftRight size={13} />
             Arraste os cards para mudar o status
           </div>

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useParams, useRouterState } from '@tanstack/react-router'
 import {
+  Building2,
   Filter,
   Keyboard,
   LayoutDashboard,
@@ -14,6 +15,7 @@ import {
   X,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { useEventQuery } from '#/hooks/useEvents'
 import {
   Dialog,
   DialogContent,
@@ -75,6 +77,8 @@ export function Sidebar() {
   const params   = useParams({ strict: false })
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const eventQuery = useEventQuery(params.eventId)
+  const venueId = eventQuery.data?.venue.id
 
   return (
     <>
@@ -131,8 +135,8 @@ export function Sidebar() {
           })}
         </nav>
 
-        {/* Atalho do dia */}
-        <div className="mt-auto px-2">
+        {/* Atalho do dia + botão pavilhão */}
+        <div className="mt-auto flex flex-col gap-2 px-2">
           <button
             onClick={() => setShortcutsOpen(true)}
             className="w-full rounded-xl border border-border bg-surface-2/60 p-3 text-left transition-colors hover:bg-surface-2"
@@ -155,6 +159,14 @@ export function Sidebar() {
             <p className="mt-1.5 text-[12px] text-fg-muted">{todayTip.label}</p>
             <p className="mt-2 text-[10px] text-fg-subtle">Clique para ver todos os atalhos</p>
           </button>
+
+          <Link
+            to={venueId ? `/venues/${venueId}` : '/'}
+            className="flex items-center justify-center gap-2 rounded-xl border border-border bg-surface-2/60 px-3 py-2.5 text-[13px] font-semibold text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
+          >
+            <Building2 size={14} />
+            Eventos do pavilhão
+          </Link>
         </div>
       </aside>
 

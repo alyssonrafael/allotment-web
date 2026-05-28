@@ -85,56 +85,57 @@ function StandsScreen() {
   return (
     <div className="animate-in fade-in slide-in-from-bottom-3 duration-300 ease-out flex flex-col gap-4">
       {/* ── Filter bar ────────────────────────────────────────────── */}
-      <Card className="flex items-center gap-3 p-4">
-       <div className="flex w-full items-center gap-4">
-  {/* Input de Busca */}
-  <div className="relative shrink-0">
-    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-subtle" />
-    <Input
-      className="w-60 pl-9"
-      placeholder="Buscar por código ou nome…"
-      value={search}
-      onChange={(e) => handleSearch(e.target.value)}
-    />
-  </div>
+      <Card className="p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+          {/* Input de Busca */}
+          <div className="relative shrink-0">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-subtle" />
+            <Input
+              className="w-full pl-9 sm:w-60"
+              placeholder="Buscar por código ou nome…"
+              value={search}
+              onChange={(e) => handleSearch(e.target.value)}
+            />
+          </div>
 
-  {/* Divisor */}
-  <div className="h-5 w-px shrink-0 bg-border" />
+          {/* Divisor */}
+          <div className="hidden h-5 w-px shrink-0 bg-border sm:block" />
 
-  {/* Filtros */}
-  <div className="flex flex-1 items-center gap-2 overflow-x-auto">
-    {STATUS_FILTERS.map((f) => {
-      const count = f.value === null ? list.length : counts[f.value]
-      const active = statusFilter === f.value
-      return (
-        <button
-          key={f.label}
-          onClick={() => handleFilter(f.value)}
-          className={cn(
-            'inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-semibold transition-colors',
-            active
-              ? 'bg-brand-primary text-white'
-              : 'bg-surface-2 text-fg-muted hover:bg-surface-3 hover:text-fg',
-          )}
-        >
-          {f.label}
-          <span
-            className={cn(
-              'rounded-full px-1.5 py-0.5 text-[11px] font-bold',
-              active ? 'bg-white/25 text-white' : 'bg-surface-3 text-fg-subtle',
-            )}
-          >
-            {count}
-          </span>
-        </button>
-      )
-    })}
-  </div>
-</div>
+          {/* Filtros */}
+          <div className="flex flex-wrap items-center gap-2 sm:flex-1 sm:flex-nowrap sm:overflow-x-auto sm:overflow-y-hidden">
+            {STATUS_FILTERS.map((f) => {
+              const count = f.value === null ? list.length : counts[f.value]
+              const active = statusFilter === f.value
+              return (
+                <button
+                  key={f.label}
+                  onClick={() => handleFilter(f.value)}
+                  className={cn(
+                    'inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-semibold transition-colors',
+                    active
+                      ? 'bg-brand-primary text-white'
+                      : 'bg-surface-2 text-fg-muted hover:bg-surface-3 hover:text-fg',
+                  )}
+                >
+                  {f.label}
+                  <span
+                    className={cn(
+                      'rounded-full px-1.5 py-0.5 text-[11px] font-bold',
+                      active ? 'bg-white/25 text-white' : 'bg-surface-3 text-fg-subtle',
+                    )}
+                  >
+                    {count}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
       </Card>
 
       {/* ── Table ─────────────────────────────────────────────────── */}
       <Card className="overflow-hidden p-0">
+        <div className="overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -209,10 +210,11 @@ function StandsScreen() {
             ))}
           </TableBody>
         </Table>
+        </div>
 
         {/* ── Pagination ────────────────────────────────────────────── */}
         {!isLoading && totalPages > 1 && (
-          <div className="flex items-center justify-between border-t border-border px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-3">
             <span className="text-[11px] text-fg-subtle">
               {safePage * PAGE_SIZE + 1}–{Math.min((safePage + 1) * PAGE_SIZE, filtered.length)} de{' '}
               {filtered.length}
