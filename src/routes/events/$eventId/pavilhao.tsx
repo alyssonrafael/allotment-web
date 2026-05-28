@@ -104,6 +104,9 @@ function PavilionEditorScreen() {
   const [confirmDiscard, setConfirmDiscard] = useState(false)
   // Ids alvo da confirmação de delete (Del/Backspace). Null = modal fechado.
   const [pendingDeleteIds, setPendingDeleteIds] = useState<Array<string> | null>(null)
+  const [isLg, setIsLg] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(min-width: 1024px)').matches : false,
+  )
 
   const createMutation = useCreateAllotment(eventId)
   const updateMutation = useUpdateAllotment(eventId)
@@ -113,6 +116,13 @@ function PavilionEditorScreen() {
   const allotments = allotmentsQ.data ?? []
   const isLoading = eventQ.isLoading || allotmentsQ.isLoading
   const pixelsPerMeter = SCALE * zoom
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)')
+    const handler = (e: MediaQueryListEvent) => setIsLg(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
 
   // Limpa histórico ao trocar de evento
   useEffect(() => {
@@ -558,14 +568,16 @@ function PavilionEditorScreen() {
 
   return (
     <>
-    {/* Overlay para telas pequenas — bottom-16 deixa o BottomNav visível */}
-    <div className="fixed inset-x-0 top-0 bottom-16 z-39 flex flex-col items-center justify-center gap-4 bg-background p-8 text-center lg:hidden">
-      <Monitor size={48} className="text-brand-primary" />
-      <h2 className="text-xl font-bold text-fg">Tela muito pequena</h2>
-      <p className="max-w-xs text-sm text-fg-muted">
-        O editor de pavilhão requer uma tela maior. Continue em um computador ou expanda a janela do navegador.
-      </p>
-    </div>
+    {!isLg && (
+      <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
+        <Monitor size={48} className="text-brand-primary" />
+        <h2 className="text-xl font-bold text-fg">Tela muito pequena</h2>
+        <p className="max-w-xs text-sm text-fg-muted">
+          O editor de pavilhão requer uma tela maior. Continue em um computador ou expanda a janela do navegador.
+        </p>
+      </div>
+    )}
+    {isLg && (
     <div className="-mx-5 -my-4 flex h-[calc(100vh-72px)] overflow-hidden">
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden px-5 pt-3 pb-3">
         {/* Toolbar */}
@@ -764,34 +776,35 @@ function PavilionEditorScreen() {
         <StandTipsBar />
       </div>
 
-      <AlertDialog
-        open={pendingDeleteIds !== null}
-        onOpenChange={(open) => !open && setPendingDeleteIds(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {pendingDeleteIds && pendingDeleteIds.length === 1
-                ? 'Excluir stand?'
-                : `Excluir ${pendingDeleteIds?.length ?? 0} stands?`}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta ação não pode ser desfeita. Os stands selecionados serão removidos
-              permanentemente do evento.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-red-500 text-white hover:bg-red-600"
-              onClick={confirmDeletePending}
-            >
-              Excluir
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
+    )}
+    <AlertDialog
+      open={pendingDeleteIds !== null}
+      onOpenChange={(open) => !open && setPendingDeleteIds(null)}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            {pendingDeleteIds && pendingDeleteIds.length === 1
+              ? 'Excluir stand?'
+              : `Excluir ${pendingDeleteIds?.length ?? 0} stands?`}
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            Esta ação não pode ser desfeita. Os stands selecionados serão removidos
+            permanentemente do evento.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-red-500 text-white hover:bg-red-600"
+            onClick={confirmDeletePending}
+          >
+            Excluir
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     </>
   )
 }

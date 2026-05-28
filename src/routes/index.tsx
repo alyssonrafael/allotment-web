@@ -157,7 +157,7 @@ function HeroBanner({ stats }: HeroBannerProps) {
             deles. Cada evento herda o tamanho do pavilhão automaticamente.
           </p>
         </div>
-        <div className="grid grid-cols-3 gap-6 sm:gap-8">
+        <div className="grid grid-cols-3 gap-4 sm:gap-8">
           <HeroStat
             icon={Building2}
             label="Pavilhões"
@@ -191,12 +191,12 @@ interface HeroStatProps {
 
 function HeroStat({ icon: Icon, label, value, color }: HeroStatProps) {
   return (
-    <div className="flex flex-col items-start">
+    <div className="flex min-w-0 flex-col items-start">
       <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-fg-muted">
         <Icon size={12} className={color} />
         {label}
       </span>
-      <span className={`mt-1 text-[28px] font-extrabold leading-none tabular-nums ${color}`}>
+      <span className={`mt-1 text-[22px] font-extrabold leading-none tabular-nums sm:text-[28px] ${color}`}>
         {value}
       </span>
     </div>

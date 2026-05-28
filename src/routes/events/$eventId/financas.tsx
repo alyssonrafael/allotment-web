@@ -276,7 +276,7 @@ function FinancasScreen() {
 
       {/* ── Seção 3: Contribuição por stand ──────────────────────── */}
       <Card className="overflow-hidden p-0">
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+        <div className="flex flex-col gap-2 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <h3 className="text-h2">Contribuição por stand</h3>
           <div className="flex items-center gap-1.5">
             {SORT_OPTIONS.map((opt) => (

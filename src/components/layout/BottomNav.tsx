@@ -22,7 +22,7 @@ export function BottomNav() {
   const pathname = useRouterState({ select: (s) => s.location.pathname })
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 grid h-16 grid-cols-5 border-t border-border bg-sidebar lg:hidden">
+    <nav className="grid h-16 grid-cols-5 border-t border-border bg-sidebar lg:hidden">
       {NAV.map((item) => {
         const to = params.eventId
           ? `/events/${params.eventId}/${item.screen}`
