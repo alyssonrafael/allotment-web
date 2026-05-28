@@ -578,7 +578,7 @@ function PavilionEditorScreen() {
       </div>
     )}
     {isLg && (
-    <div className="-mx-5 -my-4 flex h-[calc(100vh-80px)] overflow-hidden">
+    <div className="-mx-5 -my-4 flex h-[calc(100svh-80px)] overflow-hidden">
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden px-5 pt-3 pb-3">
         {/* Toolbar */}
         <div className="flex items-center gap-3 pb-3">
