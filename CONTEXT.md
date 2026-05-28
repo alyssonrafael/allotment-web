@@ -272,11 +272,11 @@ Nenhum allotment pode sobrepor outro (AABB)
 | Rota | Tela | Descrição |
 |---|---|---|
 | `/events` | Hub de pavilhões | Lista venues com eventos agrupados; modais de criação |
-| `/events/$eventId/dashboard` | Dashboard | KPIs, donut chart de status, heatmap, atividade recente paginada (PAGE_SIZE 10) |
-| `/events/$eventId/pavilhao` | Editor visual | Canvas drag/drop/resize (react-konva), mini-mapa, painel lateral; aceita `?standId=` para pré-selecionar stand |
-| `/events/$eventId/stands` | Gestão de stands | Tabela paginada (PAGE_SIZE 10) com filtros por status + busca; edição inline (nome/preço — `code` imutável); exclusão com `AlertDialog`; botão de mapa navega para `/pavilhao?standId=` |
+| `/events/$eventId/dashboard` | Dashboard | KPIs, donut chart de status, heatmap, atividade recente paginada (PAGE_SIZE 10) — usa `<Pagination>` |
+| `/events/$eventId/pavilhao` | Editor visual | Canvas drag/drop/resize (react-konva), mini-mapa, painel lateral; aceita `?standId=` para pré-selecionar stand; toolbar com `SaveStatus` + dropdown "Exportar" (PNG/JSON/PDF) |
+| `/events/$eventId/stands` | Gestão de stands | Tabela paginada (PAGE_SIZE 10) com filtros por status + busca; edição inline (nome/preço — `code` imutável); exclusão com `AlertDialog`; botão de mapa navega para `/pavilhao?standId=`; usa `<Pagination>` |
 | `/events/$eventId/comercial` | Funil de vendas | Kanban com drag entre 4 colunas de status |
-| `/events/$eventId/financas` | Análise financeira | 3 KPIs (Potencial/Comprometido/Realizado), barra segmentada de receita por status, mini-cards por status, distribuição de área, tabela de contribuição com sort (preço/dimensão/status) e paginação (PAGE_SIZE 8) |
+| `/events/$eventId/financas` | Análise financeira | 3 KPIs (Potencial/Comprometido/Realizado), barra segmentada de receita por status, mini-cards por status, distribuição de área, tabela de contribuição com sort (preço/dimensão/status) e paginação (PAGE_SIZE 8) — usa `<Pagination>` |
 
 `/events/$eventId/route.tsx` é a layout route: carrega o evento, seta `uiStore.activeEventId` e renderiza `<AppShell>` com `<Outlet>`.
 
@@ -378,6 +378,29 @@ Antes de aplicar alterações de largura/altura via inputs, valida:
 2. `detectOverlap(candidate, outroStand)` para cada stand diferente
 
 Se inválido → `toast.error(...)`, retorna sem chamar `onChange`. `onBlur` restaura o input ao valor real de `allotment.width`/`height` se divergirem. O painel recebe `allotments: Array<Allotment>` para realizar essa checagem.
+
+### 7.12 Save — comportamento atual
+
+`autosaveEnabled` padrão `true` (debounce 2 s). O `flushDirty` nunca dispara toast de sucesso. O toolbar exibe um único `SaveStatus`:
+
+| Estado | UI |
+|---|---|
+| Request em voo (`saveStatus==='saving'`) | "Salvando…" spinner; imóvel até a request concluir |
+| Auto + timer pendente | "Salvando…" spinner + X (cancela o timer) |
+| Sujo sem timer (manual ou após cancelar) | Botão "Salvar (n)" + X (descarta com `toast('Edições canceladas')`) |
+| Limpo | "Salvo ✓" discreto verde |
+
+Undo/redo agenda `scheduleAutosave` como uma edição normal (sem flush imediato) — evita flicker de botões. `onInvalidMove` tem throttle de 1,5 s para não repetir toast a cada frame de drag.
+
+### 7.13 Exportação — PNG / JSON / PDF
+
+Dropdown "Exportar" no toolbar (`Download` icon, lucide). JSON exporta direto da memória. PNG e PDF:
+1. `setExportTask({ kind, exportedAt })` → monta `<ExportStage>` off-screen
+2. `useEffect` aguarda `document.fonts.ready` + 2 rAF
+3. Chama `exportPavilionPNG` ou `exportPavilionPDF` do `src/lib/pavilionExport.ts`
+4. `toast.success('Exportado PNG/PDF')` + `setExportTask(null)` (desmonta o stage)
+
+A captura independe do zoom, scroll e tema da visualização ao vivo.
 
 ---
 
@@ -589,7 +612,7 @@ interface CanvasStore {
   selectedId:      string | null
   selectedIds:     string[]        // sempre 0 ou 1 item (single-select only)
   zoom:            number
-  autosaveEnabled: boolean
+  autosaveEnabled: boolean         // padrão: true (auto-save silencioso de 2 s)
   dirtyIds:        string[]        // IDs com alterações não salvas
   setSelected:     (id: string | null) => void
   clearSelection:  () => void
@@ -703,14 +726,16 @@ export const ALT_KEY  = isMac ? '⌥' : 'Alt'
 
 ### `src/components/canvas/AllotmentNode.tsx`
 - Konva Group com: `Rect` de fundo (gradiente por status), stripe top 3px, code badge, nome, dimensões, preço
-- Props: `allotment`, `isSelected`, `isCollision`, `hideLabels`, `draggable`, `onSelect`, `onDragStart`, `onDragCursor`, `onDragMove`, `onDragEnd`
+- Props: `allotment`, `isSelected`, `isCollision`, `hideLabels`, `draggable`, `forceLight`, `onSelect`, `onDragStart`, `onDragCursor`, `onDragMove`, `onDragEnd`
 - `hideLabels=true` → renderiza só fundo + stripe + anel de seleção
+- `forceLight=true` → usa cores light hardcoded em vez dos tokens CSS (usado em `ExportStage`)
 - `onDragCursor(clientX, clientY)` → alimenta auto-pan em PavilionStage
 
 ### `src/components/canvas/Grid.tsx`
 - Linhas finas a cada 1m + linhas grossas a cada 5m + borda do canvas
 - Borda: `--border-strong`, `strokeWidth=2`, `cornerRadius=8` — neutro, sem azul
 - Cores via `useCssTokens(['--border-color', '--border-strong', '--surface-2'])`
+- Prop `forceLight?: boolean` — quando `true`, usa literais light hardcoded em vez dos tokens (usado em `ExportStage`)
 
 ### `src/components/canvas/MiniMap.tsx`
 - SVG ~100px largura, posicionado `absolute bottom-3 right-3`
@@ -745,6 +770,27 @@ export const ALT_KEY  = isMac ? '⌥' : 'Alt'
 - Callbacks: `onUndo`, `onRedo`, `onDelete`, `onSave`, `onZoomIn`, `onZoomOut`
 - `onDelete` → abre AlertDialog (não deleta diretamente)
 - Ignorado quando foco está em INPUT/TEXTAREA
+
+### `src/components/canvas/ExportStage.tsx`
+- `forwardRef<Konva.Stage>` — Stage estático para exportação (PNG/PDF)
+- Escala 1 (pavilhão inteiro), sem padding, sem zoom, sem interação
+- Usa `forceLight` em `Grid` e `AllotmentNode` → sempre tema claro
+- Montado off-screen (`position:fixed; left:-100000px`) apenas durante exportação; desmontado após captura
+- Captura: `document.fonts.ready` + 2× `requestAnimationFrame` antes de `stage.toDataURL({ pixelRatio: 2 })`
+
+### `src/lib/pavilionExport.ts`
+- `exportPavilionPNG(stage, filename)` → `stage.toDataURL({ pixelRatio: 2 / stage.scaleX() })` + download
+- `exportPavilionJSON(event, allotments, filename, exportedAt)` → JSON blob + download
+- `exportPavilionPDF(stage, event, allotments, filename, exportedAt)` → `jsPDF` A4 landscape; cabeçalho (nome, pavilhão, datas, gerado em), imagem da planta, `autoTable` com stands (Código · Nome · Área · Status · Preço)
+- `slugify(value)` → slug seguro para nome de arquivo
+- Deps: `jspdf`, `jspdf-autotable`
+
+### `src/components/shared/Pagination.tsx`
+- Props: `page` (base 0), `pageSize`, `totalItems`, `onPageChange`, `className?`
+- Desktop (`sm+`): números janelados — primeira, última, atual ± 1, com `…` nos saltos (≤ ~7 botões sempre)
+- Mobile (`< sm`): setas ‹ › + indicador compacto "X / Y" (números ocultos com `sm:hidden`)
+- Retorna `null` com 0 ou 1 página
+- Usado em: `dashboard.tsx` (atividade recente), `stands.tsx`, `financas.tsx`
 
 ### `src/hooks/useAutosave.ts`
 - `schedule(id)` → debounce 2000ms, chama `flushDirty`

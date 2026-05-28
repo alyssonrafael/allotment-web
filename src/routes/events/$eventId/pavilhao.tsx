@@ -3,19 +3,24 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
-  CircleSlash,
+  Check,
+  Download,
+  FileImage,
+  FileJson,
+  FileText,
   Loader2,
   Monitor,
   Plus,
   Redo2,
-  RotateCcw,
   Save,
   Undo2,
+  X,
   Zap,
   ZapOff,
   ZoomIn,
   ZoomOut,
 } from 'lucide-react'
+import type Konva from 'konva'
 import { useEventQuery } from '#/hooks/useEvents'
 import {
   allotmentsKeys,
@@ -26,6 +31,12 @@ import {
 } from '#/hooks/useAllotments'
 import { Button } from '#/components/ui/button'
 import { Skeleton } from '#/components/ui/skeleton'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '#/components/ui/dropdown-menu'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,6 +52,7 @@ import { useUIStore } from '#/stores/uiStore'
 import { useHistoryStore } from '#/stores/historyStore'
 import type { AllotmentDiff, HistoryEntry } from '#/stores/historyStore'
 import { PavilionStage } from '#/components/canvas/PavilionStage'
+import { ExportStage } from '#/components/canvas/ExportStage'
 import { MiniMap } from '#/components/canvas/MiniMap'
 import { StandTipsBar } from '#/components/canvas/StandTipsBar'
 import { AllotmentPanel } from '#/components/allotments/AllotmentPanel'
@@ -49,6 +61,12 @@ import { findFreeSlot, generateCode } from '#/lib/allotmentInsert'
 import { useAutosave } from '#/hooks/useAutosave'
 import { usePavilionHotkeys } from '#/hooks/usePavilionHotkeys'
 import { cn } from '#/lib/utils.ts'
+import {
+  exportPavilionJSON,
+  exportPavilionPDF,
+  exportPavilionPNG,
+  slugify,
+} from '#/lib/pavilionExport'
 import type { Allotment } from '#/types'
 
 export const Route = createFileRoute('/events/$eventId/pavilhao')({
@@ -86,6 +104,7 @@ function PavilionEditorScreen() {
   const markDirty = useCanvasStore((s) => s.markDirty)
   const clearDirty = useCanvasStore((s) => s.clearDirty)
   const setSaveStatus = useUIStore((s) => s.setSaveStatus)
+  const saveStatus = useUIStore((s) => s.saveStatus)
 
   const pushHistory = useHistoryStore((s) => s.push)
   const popUndo = useHistoryStore((s) => s.popUndo)
@@ -95,15 +114,22 @@ function PavilionEditorScreen() {
   const canRedo = useHistoryStore((s) => s.future.length > 0)
 
   const scrollWrapRef = useRef<HTMLDivElement | null>(null)
+  const exportStageRef = useRef<Konva.Stage | null>(null)
+  // Throttle do toast de movimento inválido (não repetir a cada frame de drag).
+  const lastInvalidToastRef = useRef(0)
   /**
    * Snapshot do estado de cada stand no momento em que ele entrou em dirty
    * pela primeira vez (= estado igual ao do servidor). Usado pelo botão
    * "Cancelar edições" pra reverter sem precisar de roundtrip.
    */
   const preDirtySnapshotsRef = useRef<Map<string, AllotmentDiff>>(new Map())
-  const [confirmDiscard, setConfirmDiscard] = useState(false)
   // Ids alvo da confirmação de delete (Del/Backspace). Null = modal fechado.
   const [pendingDeleteIds, setPendingDeleteIds] = useState<Array<string> | null>(null)
+  // Tarefa de exportação pendente — monta o ExportStage fora da tela e captura.
+  const [exportTask, setExportTask] = useState<{
+    kind: 'png' | 'pdf'
+    exportedAt: string
+  } | null>(null)
   const [isLg, setIsLg] = useState(() =>
     typeof window !== 'undefined' ? window.matchMedia('(min-width: 1024px)').matches : false,
   )
@@ -171,9 +197,6 @@ function PavilionEditorScreen() {
           preDirtySnapshotsRef.current.delete(id)
         })
         setSaveStatus('saved')
-        toast.success(
-          ids.length === 1 ? 'Alterações salvas' : `${ids.length} stands salvos`,
-        )
       } catch {
         setSaveStatus('idle')
         toast.error('Falha ao salvar')
@@ -428,20 +451,8 @@ function PavilionEditorScreen() {
     clearDirty()
     clearHistory()
     setSaveStatus('saved')
-    toast.success('Alterações descartadas')
+    toast('Edições canceladas')
   }, [cancelAutosave, applyDiff, clearDirty, clearHistory, setSaveStatus])
-
-  // Reset do confirm de descarte: auto-reverte após 3s ou quando dirty zera
-  // ou quando autosave é ligado (a UI do botão some).
-  useEffect(() => {
-    if (!confirmDiscard) return
-    if (dirtyIds.length === 0 || autosaveEnabled) {
-      setConfirmDiscard(false)
-      return
-    }
-    const timer = setTimeout(() => setConfirmDiscard(false), 3000)
-    return () => clearTimeout(timer)
-  }, [confirmDiscard, dirtyIds.length, autosaveEnabled])
 
   const handlePanelDelete = useCallback(
     (allotment: Allotment) => {
@@ -494,18 +505,14 @@ function PavilionEditorScreen() {
       applyDiff(entry.id, target)
       markDirty(entry.id)
       setSaveStatus('idle')
-      if (autosaveEnabled) {
-        cancelAutosave()
-        void flushDirty([entry.id])
-      }
+      if (autosaveEnabled) scheduleAutosave(entry.id)
     },
     [
       applyDiff,
       markDirty,
       setSaveStatus,
       autosaveEnabled,
-      cancelAutosave,
-      flushDirty,
+      scheduleAutosave,
     ],
   )
 
@@ -520,6 +527,80 @@ function PavilionEditorScreen() {
     if (!entry) return
     applyHistoryEntry(entry, 'redo')
   }, [popRedo, applyHistoryEntry])
+
+  const handleExport = useCallback(
+    (kind: 'png' | 'json' | 'pdf') => {
+      if (!event) return
+      if (kind === 'json') {
+        try {
+          exportPavilionJSON(
+            event,
+            allotments,
+            `pavilhao-${slugify(event.name)}.json`,
+            new Date().toISOString(),
+          )
+          toast.success('Exportado JSON')
+        } catch {
+          toast.error('Falha ao exportar')
+        }
+        return
+      }
+      // PNG/PDF precisam do canvas — monta o ExportStage fora da tela.
+      setExportTask({ kind, exportedAt: new Date().toISOString() })
+    },
+    [event, allotments],
+  )
+
+  // Captura do ExportStage assim que ele monta (fontes carregadas + 2 frames).
+  useEffect(() => {
+    if (!exportTask || !event) return
+    let cancelled = false
+    let raf1 = 0
+    let raf2 = 0
+    void document.fonts.ready.then(() => {
+      raf1 = requestAnimationFrame(() => {
+        raf2 = requestAnimationFrame(() => {
+          if (cancelled) return
+          const stage = exportStageRef.current
+          const base = `pavilhao-${slugify(event.name)}`
+          try {
+            if (!stage) throw new Error('stage não montado')
+            if (exportTask.kind === 'png') {
+              exportPavilionPNG(stage, `${base}.png`)
+            } else {
+              exportPavilionPDF(
+                stage,
+                event,
+                allotments,
+                `${base}.pdf`,
+                exportTask.exportedAt,
+              )
+            }
+            toast.success(`Exportado ${exportTask.kind.toUpperCase()}`)
+          } catch {
+            toast.error('Falha ao exportar')
+          }
+          setExportTask(null)
+        })
+      })
+    })
+    return () => {
+      cancelled = true
+      if (raf1) cancelAnimationFrame(raf1)
+      if (raf2) cancelAnimationFrame(raf2)
+    }
+  }, [exportTask, event, allotments])
+
+  const handleInvalidMove = useCallback((reason: 'overlap' | 'bounds') => {
+    const now = Date.now()
+    if (now - lastInvalidToastRef.current < 1500) return
+    lastInvalidToastRef.current = now
+    toast.error(
+      reason === 'overlap'
+        ? 'Movimento bloqueado: colide com outro stand'
+        : 'Movimento bloqueado: fora dos limites',
+    )
+  }, [])
 
   const handleZoomIn = useCallback(() => {
     setZoom(Math.min(3, zoom + 0.1))
@@ -620,59 +701,17 @@ function PavilionEditorScreen() {
               onRedo={handleRedo}
             />
             <AutosaveToggle enabled={autosaveEnabled} onToggle={toggleAutosave} />
-            {autosaveEnabled && autosavePending && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={cancelAutosave}
-                title="Cancelar o save automático pendente — as alterações ficam locais até você salvar manualmente"
-              >
-                <CircleSlash size={14} />
-                Cancelar save
-              </Button>
-            )}
-            {(!autosaveEnabled || !autosavePending) && (
-              <Button
-                size="sm"
-                variant={dirtyIds.length > 0 ? 'default' : 'outline'}
-                onClick={handleManualSave}
-                disabled={dirtyIds.length === 0 || updateMutation.isPending}
-              >
-                {updateMutation.isPending ? (
-                  <Loader2 size={14} className="animate-spin" />
-                ) : (
-                  <Save size={14} />
-                )}
-                {dirtyIds.length > 0 ? `Salvar (${dirtyIds.length})` : 'Salvo'}
-              </Button>
-            )}
-            {!autosaveEnabled && dirtyIds.length > 0 && (
-              confirmDiscard ? (
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => {
-                    handleDiscardEdits()
-                    setConfirmDiscard(false)
-                  }}
-                  title="Clique para confirmar — reverte tudo ao estado do servidor"
-                >
-                  <RotateCcw size={14} />
-                  Confirmar descarte
-                </Button>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setConfirmDiscard(true)}
-                  title="Descartar alterações locais e voltar ao estado do servidor"
-                >
-                  <RotateCcw size={14} />
-                  Cancelar edições
-                </Button>
-              )
-            )}
+            <SaveStatus
+              autosaveEnabled={autosaveEnabled}
+              pending={autosavePending}
+              dirtyCount={dirtyIds.length}
+              isSaving={updateMutation.isPending || saveStatus === 'saving'}
+              onSaveNow={handleManualSave}
+              onDiscard={handleDiscardEdits}
+              onCancelAuto={cancelAutosave}
+            />
             <ZoomStepper zoom={zoom} setZoom={setZoom} />
+            <ExportMenu disabled={!event} onExport={handleExport} />
           </div>
         </div>
 
@@ -723,13 +762,7 @@ function PavilionEditorScreen() {
                 onClearSelection={clearSelection}
                 onPositionCommit={handlePositionCommit}
                 onTransformCommit={handleTransformCommit}
-                onInvalidMove={(reason) =>
-                  toast.error(
-                    reason === 'overlap'
-                      ? 'Movimento bloqueado: colide com outro stand'
-                      : 'Movimento bloqueado: fora dos limites',
-                  )
-                }
+                onInvalidMove={handleInvalidMove}
                 scrollWrapRef={scrollWrapRef}
                 canvasPadding={CANVAS_PADDING}
               />
@@ -777,6 +810,19 @@ function PavilionEditorScreen() {
       </div>
 
     </div>
+    )}
+    {exportTask && event && (
+      <div
+        aria-hidden
+        style={{
+          position: 'fixed',
+          left: -100000,
+          top: 0,
+          pointerEvents: 'none',
+        }}
+      >
+        <ExportStage ref={exportStageRef} event={event} allotments={allotments} />
+      </div>
     )}
     <AlertDialog
       open={pendingDeleteIds !== null}
@@ -892,12 +938,117 @@ function AutosaveToggle({
       )}
       title={
         enabled
-          ? 'Autosave ligado: salva após 1,5s parado'
+          ? 'Autosave ligado: salva após 2s parado'
           : 'Autosave desligado: salve manualmente'
       }
     >
       {enabled ? <Zap size={12} /> : <ZapOff size={12} />}
       {enabled ? 'Auto' : 'Manual'}
     </button>
+  )
+}
+
+// Status único de gravação. Um só elemento, sem duplicação nem flicker:
+// - salvando (request em voo, ou autosave pendente) → "Salvando…" e só sai
+//   desse estado quando a request conclui;
+// - sujo sem timer (manual, ou auto após cancelar) → botão "Salvar (n)" + X;
+// - limpo → "Salvo".
+function SaveStatus({
+  autosaveEnabled,
+  pending,
+  dirtyCount,
+  isSaving,
+  onSaveNow,
+  onDiscard,
+  onCancelAuto,
+}: {
+  autosaveEnabled: boolean
+  pending: boolean
+  dirtyCount: number
+  isSaving: boolean
+  onSaveNow: () => void
+  onDiscard: () => void
+  onCancelAuto: () => void
+}) {
+  if (isSaving) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-fg-muted">
+        <Loader2 size={12} className="animate-spin" />
+        Salvando…
+      </span>
+    )
+  }
+  if (autosaveEnabled && pending) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-fg-muted">
+        <Loader2 size={12} className="animate-spin" />
+        Salvando…
+        <IconX onClick={onCancelAuto} title="Cancelar save automático" />
+      </span>
+    )
+  }
+  if (dirtyCount > 0) {
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        <Button size="sm" onClick={onSaveNow}>
+          <Save size={14} />
+          Salvar ({dirtyCount})
+        </Button>
+        <IconX onClick={onDiscard} title="Cancelar edições" />
+      </span>
+    )
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-status-livre-text">
+      <Check size={12} />
+      Salvo
+    </span>
+  )
+}
+
+function IconX({ onClick, title }: { onClick: () => void; title: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      className="inline-flex size-6 items-center justify-center rounded-full text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
+    >
+      <X size={13} />
+    </button>
+  )
+}
+
+function ExportMenu({
+  disabled,
+  onExport,
+}: {
+  disabled: boolean
+  onExport: (kind: 'png' | 'json' | 'pdf') => void
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button size="sm" variant="outline" disabled={disabled}>
+          <Download size={14} />
+          Exportar
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => onExport('png')}>
+          <FileImage size={14} />
+          PNG (imagem)
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onExport('pdf')}>
+          <FileText size={14} />
+          PDF (planta + tabela)
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onExport('json')}>
+          <FileJson size={14} />
+          JSON (dados)
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

@@ -12,6 +12,8 @@ interface AllotmentNodeProps {
   isCollision: boolean
   draggable: boolean
   hideLabels?: boolean
+  /** Força cores do tema claro (usado na exportação). */
+  forceLight?: boolean
   onSelect: (id: string, shift: boolean) => void
   onDragMove: (id: string, xMeters: number, yMeters: number) => void
   onDragEnd: (id: string, xMeters: number, yMeters: number) => void
@@ -51,6 +53,7 @@ export const AllotmentNode = forwardRef<Konva.Group, AllotmentNodeProps>(functio
     isCollision,
     draggable,
     hideLabels = false,
+    forceLight = false,
     onSelect,
     onDragMove,
     onDragEnd,
@@ -67,11 +70,11 @@ export const AllotmentNode = forwardRef<Konva.Group, AllotmentNodeProps>(functio
   const isCompact = widthPx < 140 || heightPx < 90
   const statusColor = STATUS_COLORS[allotment.status]
   const statusText = STATUS_TEXT_COLORS[allotment.status]
-  const surface = tokens['--surface'] || '#fff'
-  const fg = tokens['--fg'] || '#0d1020'
-  const fgMuted = tokens['--fg-muted'] || '#525873'
-  const primary = tokens['--brand-primary'] || '#2563eb'
-  const erro = tokens['--status-erro'] || '#ef4444'
+  const surface = forceLight ? '#fff' : tokens['--surface'] || '#fff'
+  const fg = forceLight ? '#0d1020' : tokens['--fg'] || '#0d1020'
+  const fgMuted = forceLight ? '#525873' : tokens['--fg-muted'] || '#525873'
+  const primary = forceLight ? '#2563eb' : tokens['--brand-primary'] || '#2563eb'
+  const erro = forceLight ? '#ef4444' : tokens['--status-erro'] || '#ef4444'
 
   const dimensionsLabel = `${allotment.width}×${allotment.height}m`
   const priceLabel = fmtBRLcompact(allotment.price)

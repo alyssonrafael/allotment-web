@@ -5,6 +5,8 @@ import { useCssTokens } from '#/hooks/useCssTokens'
 interface GridProps {
   widthMeters: number
   heightMeters: number
+  /** Força cores do tema claro (usado na exportação). */
+  forceLight?: boolean
 }
 
 const TOKEN_NAMES = [
@@ -13,13 +15,13 @@ const TOKEN_NAMES = [
   '--surface-2',
 ] as const
 
-export function Grid({ widthMeters, heightMeters }: GridProps) {
+export function Grid({ widthMeters, heightMeters, forceLight = false }: GridProps) {
   const tokens = useCssTokens(TOKEN_NAMES)
   const widthPx = widthMeters * SCALE
   const heightPx = heightMeters * SCALE
-  const fine = tokens['--border-color'] || '#e6e8f0'
-  const strong = tokens['--border-strong'] || '#d4d8e6'
-  const surface2 = tokens['--surface-2'] || '#f1f3f9'
+  const fine = forceLight ? '#e6e8f0' : tokens['--border-color'] || '#e6e8f0'
+  const strong = forceLight ? '#d4d8e6' : tokens['--border-strong'] || '#d4d8e6'
+  const surface2 = forceLight ? '#f1f3f9' : tokens['--surface-2'] || '#f1f3f9'
 
   const fineLines: Array<React.ReactElement> = []
   for (let i = 1; i < widthMeters; i++) {

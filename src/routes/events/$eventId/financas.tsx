@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
-import { Banknote, ChevronLeft, ChevronRight, CheckCircle2, TrendingUp } from 'lucide-react'
+import { Banknote, CheckCircle2, TrendingUp } from 'lucide-react'
 import { useEventQuery } from '#/hooks/useEvents'
 import { useAllotmentsQuery } from '#/hooks/useAllotments'
 import { Card } from '#/components/ui/card'
@@ -15,6 +15,7 @@ import {
 } from '#/components/ui/table'
 import { StatusBadge } from '#/components/shared/StatusBadge'
 import { KPI } from '#/components/shared/KPI'
+import { Pagination } from '#/components/shared/Pagination'
 import { fmtBRL, fmtBRLcompact } from '#/lib/format'
 import { cn } from '#/lib/utils'
 import type { Allotment, AllotmentStatus } from '#/types'
@@ -358,44 +359,13 @@ function FinancasScreen() {
               </TableBody>
             </Table>
 
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between border-t border-border px-4 py-3">
-                <span className="text-[11px] text-fg-subtle">
-                  {safePage * PAGE_SIZE + 1}–{Math.min((safePage + 1) * PAGE_SIZE, sorted.length)} de{' '}
-                  {sorted.length}
-                </span>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => setPage((p) => Math.max(0, p - 1))}
-                    disabled={safePage === 0}
-                    className="flex size-7 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg disabled:pointer-events-none disabled:opacity-30"
-                  >
-                    <ChevronLeft size={13} />
-                  </button>
-                  {Array.from({ length: totalPages }, (_, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setPage(i)}
-                      className={cn(
-                        'flex size-7 items-center justify-center rounded-md text-[12px] font-semibold transition-colors',
-                        i === safePage
-                          ? 'bg-brand-primary text-white'
-                          : 'text-fg-muted hover:bg-surface-2 hover:text-fg',
-                      )}
-                    >
-                      {i + 1}
-                    </button>
-                  ))}
-                  <button
-                    onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-                    disabled={safePage === totalPages - 1}
-                    className="flex size-7 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg disabled:pointer-events-none disabled:opacity-30"
-                  >
-                    <ChevronRight size={13} />
-                  </button>
-                </div>
-              </div>
-            )}
+            <Pagination
+              page={page}
+              pageSize={PAGE_SIZE}
+              totalItems={sorted.length}
+              onPageChange={setPage}
+              className="px-4 py-3"
+            />
           </>
         )}
       </Card>

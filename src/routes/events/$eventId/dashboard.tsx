@@ -1,15 +1,15 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
-import { Activity, ChartPie, ChevronDown, Map, Wallet } from 'lucide-react'
+import { Activity, ChartPie, Map, Wallet } from 'lucide-react'
 import { useEventQuery, useEventRevenueQuery, useEventActivitiesQuery } from '#/hooks/useEvents'
 import { useAllotmentsQuery } from '#/hooks/useAllotments'
 import { Card } from '#/components/ui/card'
 import { Skeleton } from '#/components/ui/skeleton'
 import { KPI } from '#/components/shared/KPI'
 import { HeatmapCard } from '#/components/dashboard/HeatmapCard'
+import { Pagination } from '#/components/shared/Pagination'
 import { fmtBRLcompact, fmtRelativeTime } from '#/lib/format'
 import { ACTIVITY_COLORS, ACTIVITY_ICONS } from '#/lib/constants'
-import { cn } from '#/lib/utils'
 import type { AllotmentStatus, RecentActivity } from '#/types'
 
 export const Route = createFileRoute('/events/$eventId/dashboard')({
@@ -252,43 +252,13 @@ function ActivityCard({ activities, isLoading }: { activities: RecentActivity[];
               <ActivityRow key={act.id} activity={act} />
             ))}
           </ul>
-          {totalPages > 1 && (
-            <div className="mt-4 flex items-center justify-between border-t border-border pt-3">
-              <span className="text-[11px] text-fg-subtle">
-                {safePage * PAGE_SIZE + 1}–{Math.min((safePage + 1) * PAGE_SIZE, activities.length)} de {activities.length}
-              </span>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setPage((p) => Math.max(0, p - 1))}
-                  disabled={safePage === 0}
-                  className="flex size-7 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg disabled:pointer-events-none disabled:opacity-30"
-                >
-                  <ChevronDown size={13} className="rotate-90" />
-                </button>
-                {Array.from({ length: totalPages }, (_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setPage(i)}
-                    className={cn(
-                      'flex size-7 items-center justify-center rounded-md text-[12px] font-semibold transition-colors',
-                      i === safePage
-                        ? 'bg-brand-primary text-white'
-                        : 'text-fg-muted hover:bg-surface-2 hover:text-fg',
-                    )}
-                  >
-                    {i + 1}
-                  </button>
-                ))}
-                <button
-                  onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-                  disabled={safePage === totalPages - 1}
-                  className="flex size-7 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg disabled:pointer-events-none disabled:opacity-30"
-                >
-                  <ChevronDown size={13} className="-rotate-90" />
-                </button>
-              </div>
-            </div>
-          )}
+          <Pagination
+            page={page}
+            pageSize={PAGE_SIZE}
+            totalItems={activities.length}
+            onPageChange={setPage}
+            className="mt-4 pt-3"
+          />
         </>
       )}
     </Card>

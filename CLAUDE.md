@@ -42,15 +42,15 @@ src/
     allotments.ts  ← CRUD + patchPosition, patchStatus
   components/
     ui/            ← shadcn/ui (do not edit manually)
-    canvas/        ← PavilionStage, AllotmentNode, MiniMap, Grid
+    canvas/        ← PavilionStage, AllotmentNode, MiniMap, Grid, ExportStage
     events/        ← EventCard, CreateEventDialog
     allotments/    ← AllotmentForm, AllotmentPanel
     layout/        ← AppShell, Sidebar, Header, EventSelector
-    shared/        ← StatusBadge, ThemeToggle, KPI
+    shared/        ← StatusBadge, ThemeToggle, KPI, Pagination
   hooks/           ← useVenues, useEvents, useAllotments, useThemeTransition, useGlobalHotkeys
   stores/          ← canvasStore.ts, historyStore.ts, uiStore.ts
   types/           ← index.ts (Venue, Event, Allotment, AllotmentStatus, RecentActivity, EventRevenue + payloads)
-  lib/             ← utils.ts (cn), collision.ts, constants.ts, format.ts
+  lib/             ← utils.ts (cn), collision.ts, constants.ts, format.ts, pavilionExport.ts
   routes/          ← file-based routes (see Frontend Routes below)
 ```
 
@@ -191,7 +191,17 @@ Each status has three variants: `--status-{x}` (solid), `--status-{x}-50` (soft 
 
 **Delete confirmation:** Del/Backspace hotkey sets `pendingDeleteIds` state (instead of deleting directly). An `<AlertDialog>` renders and on confirm calls the actual delete logic. Cancelling clears `pendingDeleteIds`.
 
-**Save toast:** `flushDirty` dispatches `toast.success` after a successful batch save.
+**Save behavior:** `autosaveEnabled` defaults to `true` (2 s debounce via `useAutosave`). `flushDirty` never shows a success toast — saves are silent. The toolbar shows a single `SaveStatus` component:
+- Saving (request in-flight or autosave timer running) → "Salvando…" spinner. Only clears when the request resolves.
+- Auto + timer pending → "Salvando…" + X button (cancels pending autosave).
+- Dirty but no timer (manual mode, or after cancelling) → "Salvar (n)" button + X button (discards edits with `toast('Edições canceladas')`).
+- Clean → "Salvo ✓" (discrete, green).
+- Undo/redo schedules autosave like a normal edit — no immediate flush, no flicker.
+- `onInvalidMove` toast throttled to 1.5 s (same window as `AllotmentPanel.flashInvalid`).
+
+**Export (PNG / JSON / PDF):** toolbar "Exportar" dropdown (lucide `Download` icon). JSON exports immediately from in-memory data. PNG and PDF mount an `<ExportStage>` off-screen (fixed, `left: -100000px`), wait for `document.fonts.ready` + 2 rAF ticks, then call `stage.toDataURL({ pixelRatio: 2 })` — always full canvas, light theme, scale 1, independent of current zoom/scroll/theme. `ExportStage` uses `forceLight` prop on `Grid` and `AllotmentNode` to force light-mode colors. Dependencies: `jspdf`, `jspdf-autotable`.
+
+**Pagination (`src/components/shared/Pagination`):** windowed page numbers (first, last, current ± 1, with `…` gaps) — always ≤ ~7 buttons regardless of page count. On mobile (`< sm`) number buttons are hidden and replaced by a compact "X / Y" indicator. Used in dashboard (recent activities), stands table, and finanças contribution table.
 
 **Platform detection (`src/lib/platform.ts`):** `isMac` is SSR-safe (`typeof navigator !== 'undefined'` guard). Consumers must use `useEffect` to read it after mount to avoid hydration mismatch:
 ```ts
