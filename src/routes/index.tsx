@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
-import { Building2, CalendarDays, CheckCircle2, Plus, Search } from 'lucide-react'
+import { Building2, CalendarDays, CheckCircle2, Plus, Search, Sparkles } from 'lucide-react'
 import { useVenuesQuery } from '#/hooks/useVenues'
 import { useEventsQuery } from '#/hooks/useEvents'
 import { ThemeToggle } from '#/components/shared/ThemeToggle'
@@ -10,6 +10,7 @@ import { Input } from '#/components/ui/input'
 import { Skeleton } from '#/components/ui/skeleton'
 import { VenueCard } from '#/components/venues/VenueCard'
 import { CreateVenueDialog } from '#/components/venues/CreateVenueDialog'
+import { VenueAIDialog } from '#/components/ai/VenueAIDialog'
 import type { EventListItem } from '#/types'
 
 export const Route = createFileRoute('/')({
@@ -20,6 +21,7 @@ function HomeScreen() {
   const venuesQuery = useVenuesQuery()
   const eventsQuery = useEventsQuery()
   const [isCreateVenueOpen, setCreateVenueOpen] = useState(false)
+  const [isCreateVenueAIOpen, setCreateVenueAIOpen] = useState(false)
   const [query, setQuery] = useState('')
 
   const venues = venuesQuery.data ?? []
@@ -81,13 +83,19 @@ function HomeScreen() {
               className="pl-9"
             />
           </div>
-          <Button
-            onClick={() => setCreateVenueOpen(true)}
-            className="bg-brand-primary text-primary-foreground hover:bg-brand-primary/90"
-          >
-            <Plus size={16} />
-            Novo pavilhão
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setCreateVenueAIOpen(true)}>
+              <Sparkles size={16} />
+              Criar com IA
+            </Button>
+            <Button
+              onClick={() => setCreateVenueOpen(true)}
+              className="bg-brand-primary text-primary-foreground hover:bg-brand-primary/90"
+            >
+              <Plus size={16} />
+              Novo pavilhão
+            </Button>
+          </div>
         </div>
 
         <div className="mt-6">
@@ -137,6 +145,7 @@ function HomeScreen() {
       </section>
 
       <CreateVenueDialog open={isCreateVenueOpen} onOpenChange={setCreateVenueOpen} />
+      <VenueAIDialog open={isCreateVenueAIOpen} onOpenChange={setCreateVenueAIOpen} />
     </div>
   )
 }

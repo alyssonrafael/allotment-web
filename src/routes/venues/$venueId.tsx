@@ -9,6 +9,7 @@ import {
   LayoutGrid,
   MapPin,
   Plus,
+  Sparkles,
   TrendingUp,
 } from 'lucide-react'
 import { useVenueQuery, useVenueRevenueQuery } from '#/hooks/useVenues'
@@ -20,6 +21,7 @@ import { Skeleton } from '#/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
 import { EventCard } from '#/components/events/EventCard'
 import { CreateEventDialog } from '#/components/events/CreateEventDialog'
+import { EventAIDialog } from '#/components/ai/EventAIDialog'
 import { fmtBRLcompact, formatVenueAddress } from '#/lib/format'
 import type { EventListItem, EventRevenue, EventStatus } from '#/types'
 
@@ -35,6 +37,7 @@ function VenueDetailScreen() {
   const eventsQuery = useEventsQuery({ venueId })
   const revenueQuery = useVenueRevenueQuery(venueId)
   const [isCreateEventOpen, setCreateEventOpen] = useState(false)
+  const [isCreateEventAIOpen, setCreateEventAIOpen] = useState(false)
   const [tab, setTab] = useState<FilterValue>('all')
 
   const venue = venueQuery.data
@@ -113,6 +116,7 @@ function VenueDetailScreen() {
               counts={counts}
               revenue={revenueQuery.data}
               onNewEvent={() => setCreateEventOpen(true)}
+              onNewEventAI={() => setCreateEventAIOpen(true)}
             />
 
             <Tabs
@@ -138,14 +142,24 @@ function VenueDetailScreen() {
       </section>
 
       {venue && (
-        <CreateEventDialog
-          open={isCreateEventOpen}
-          onOpenChange={setCreateEventOpen}
-          venueId={venue.id}
-          venueName={venue.name}
-          venueWidth={venue.width}
-          venueHeight={venue.height}
-        />
+        <>
+          <CreateEventDialog
+            open={isCreateEventOpen}
+            onOpenChange={setCreateEventOpen}
+            venueId={venue.id}
+            venueName={venue.name}
+            venueWidth={venue.width}
+            venueHeight={venue.height}
+          />
+          <EventAIDialog
+            open={isCreateEventAIOpen}
+            onOpenChange={setCreateEventAIOpen}
+            venueId={venue.id}
+            venueName={venue.name}
+            venueWidth={venue.width}
+            venueHeight={venue.height}
+          />
+        </>
       )}
     </div>
   )
@@ -156,9 +170,10 @@ interface PavilionHeroProps {
   counts: Record<FilterValue, number>
   revenue: EventRevenue | undefined
   onNewEvent: () => void
+  onNewEventAI: () => void
 }
 
-function PavilionHero({ venue, counts, revenue, onNewEvent }: PavilionHeroProps) {
+function PavilionHero({ venue, counts, revenue, onNewEvent, onNewEventAI }: PavilionHeroProps) {
   const fullAddress = formatVenueAddress(venue, 'full')
   const area = venue.width * venue.height
 
@@ -213,13 +228,19 @@ function PavilionHero({ venue, counts, revenue, onNewEvent }: PavilionHeroProps)
           value={revenue ? fmtBRLcompact(revenue.inNegotiation) : '—'}
           tone="text-brand-primary"
         />
-        <Button
-          onClick={onNewEvent}
-          className="bg-brand-primary text-primary-foreground hover:bg-brand-primary/90"
-        >
-          <Plus size={16} />
-          Novo evento
-        </Button>
+        <div className="col-span-2 flex items-center gap-2 sm:col-span-1">
+          <Button variant="outline" onClick={onNewEventAI}>
+            <Sparkles size={16} />
+            Gerar com IA
+          </Button>
+          <Button
+            onClick={onNewEvent}
+            className="bg-brand-primary text-primary-foreground hover:bg-brand-primary/90"
+          >
+            <Plus size={16} />
+            Novo evento
+          </Button>
+        </div>
       </div>
     </Card>
   )

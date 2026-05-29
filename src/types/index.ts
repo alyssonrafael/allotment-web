@@ -149,3 +149,111 @@ export interface EventRevenue {
     blocked: number
   }
 }
+
+// ── IA (chat multi-turno — v2) ───────────────────────────────────────────────
+
+/** Turno de conversa enviado/recebido no histórico do chat de IA. */
+export interface AIMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+// ── Parse Venue ──
+
+export interface ParseVenueRequest {
+  prompt: string
+  history?: AIMessage[]
+}
+
+export interface ParsedVenue {
+  name: string
+  description: string | null
+  width: number
+  height: number
+  city: string
+  state: string
+  street: string | null
+  neighborhood: string | null
+  zipCode: string | null
+  accent: string
+  photo: string
+}
+
+export interface AISuggestedEvent {
+  name: string
+  type: EventType
+  startDate: string   // ISO 8601 UTC
+  endDate: string
+  canvasWidth: number
+  canvasHeight: number
+}
+
+export interface ParseVenueComplete {
+  status: 'complete'
+  venue: ParsedVenue
+  suggestedEvent: AISuggestedEvent | null
+  confidence: number
+  missing: string[]
+}
+
+export interface ParseVenueNeedsInfo {
+  status: 'needs_info'
+  questions: string[]
+  collected: Partial<ParsedVenue>
+  assistantMessage: string
+}
+
+export type ParseVenueResponse = ParseVenueComplete | ParseVenueNeedsInfo
+
+// ── Parse Event ──
+
+export interface ParseEventRequest {
+  prompt: string
+  venueId: string
+  canvasWidth: number
+  canvasHeight: number
+  history?: AIMessage[]
+}
+
+export interface ParsedEvent {
+  name: string
+  type: EventType
+  startDate: string
+  endDate: string
+  canvasWidth: number
+  canvasHeight: number
+}
+
+export interface AIGeneratedAllotment {
+  code: string
+  name: string
+  x: number
+  y: number
+  width: number
+  height: number
+  status: 'AVAILABLE'
+  price: number
+}
+
+export interface ParseEventComplete {
+  status: 'complete'
+  event: ParsedEvent
+  allotments: AIGeneratedAllotment[]
+  summary: {
+    total: number
+    placed: number
+    discarded: number
+    groups: Array<{ width: number; height: number; count: number; placed: number }>
+  }
+  warnings: string[]
+  missing: string[]
+}
+
+export interface ParseEventNeedsInfo {
+  status: 'needs_info'
+  questions: string[]
+  collected: Partial<Pick<ParsedEvent, 'name' | 'type' | 'startDate' | 'endDate'>>
+  assistantMessage: string
+}
+
+export type ParseEventResponse = ParseEventComplete | ParseEventNeedsInfo
