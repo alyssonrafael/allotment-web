@@ -1,28 +1,35 @@
+import { memo, useMemo } from 'react'
 import { Group, Line, Rect } from 'react-konva'
 import { SCALE } from '#/lib/constants'
-import { useCssTokens } from '#/hooks/useCssTokens'
+
+/** Cores de tema já resolvidas, passadas de cima. */
+export interface GridColors {
+  fine: string
+  strong: string
+  surface2: string
+}
+
+const LIGHT_COLORS: GridColors = {
+  fine: '#e6e8f0',
+  strong: '#d4d8e6',
+  surface2: '#f1f3f9',
+}
 
 interface GridProps {
   widthMeters: number
   heightMeters: number
   /** Força cores do tema claro (usado na exportação). */
   forceLight?: boolean
+  /** Cores resolvidas; se ausente (ou forceLight) usa o tema claro. */
+  colors?: GridColors
 }
 
-const TOKEN_NAMES = [
-  '--border-color',
-  '--border-strong',
-  '--surface-2',
-] as const
-
-export function Grid({ widthMeters, heightMeters, forceLight = false }: GridProps) {
-  const tokens = useCssTokens(TOKEN_NAMES)
+function GridInner({ widthMeters, heightMeters, forceLight = false, colors }: GridProps) {
   const widthPx = widthMeters * SCALE
   const heightPx = heightMeters * SCALE
-  const fine = forceLight ? '#e6e8f0' : tokens['--border-color'] || '#e6e8f0'
-  const strong = forceLight ? '#d4d8e6' : tokens['--border-strong'] || '#d4d8e6'
-  const surface2 = forceLight ? '#f1f3f9' : tokens['--surface-2'] || '#f1f3f9'
+  const { fine, strong, surface2 } = forceLight ? LIGHT_COLORS : colors ?? LIGHT_COLORS
 
+  return useMemo(() => {
   const fineLines: Array<React.ReactElement> = []
   for (let i = 1; i < widthMeters; i++) {
     if (i % 5 === 0) continue
@@ -93,4 +100,8 @@ export function Grid({ widthMeters, heightMeters, forceLight = false }: GridProp
       />
     </Group>
   )
+  }, [widthMeters, heightMeters, widthPx, heightPx, fine, strong, surface2])
 }
+
+/** Memoizado: a grade é estática durante drag/zoom — não reconstrói as linhas. */
+export const Grid = memo(GridInner)

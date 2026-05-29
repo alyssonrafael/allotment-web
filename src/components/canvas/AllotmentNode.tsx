@@ -1,10 +1,27 @@
-import { forwardRef, useMemo } from 'react'
+import { forwardRef, memo } from 'react'
 import { Group, Rect, Text } from 'react-konva'
 import type Konva from 'konva'
 import type { Allotment, AllotmentStatus } from '#/types'
 import { SCALE, STATUS_COLORS, STATUS_LABELS } from '#/lib/constants'
 import { fmtBRLcompact } from '#/lib/format'
-import { useCssTokens } from '#/hooks/useCssTokens'
+
+/** Cores de tema já resolvidas (hex/rgb), passadas de cima para evitar que cada
+ *  node leia tokens/getComputedStyle por conta própria. */
+export interface NodeColors {
+  surface: string
+  fg: string
+  fgMuted: string
+  primary: string
+  erro: string
+}
+
+const LIGHT_COLORS: NodeColors = {
+  surface: '#fff',
+  fg: '#0d1020',
+  fgMuted: '#525873',
+  primary: '#2563eb',
+  erro: '#ef4444',
+}
 
 interface AllotmentNodeProps {
   allotment: Allotment
@@ -14,6 +31,8 @@ interface AllotmentNodeProps {
   hideLabels?: boolean
   /** Força cores do tema claro (usado na exportação). */
   forceLight?: boolean
+  /** Cores resolvidas; se ausente (ou forceLight) usa o tema claro. */
+  colors?: NodeColors
   onSelect: (id: string, shift: boolean) => void
   onDragMove: (id: string, xMeters: number, yMeters: number) => void
   onDragEnd: (id: string, xMeters: number, yMeters: number) => void
@@ -44,9 +63,7 @@ const STATUS_TEXT_COLORS: Record<AllotmentStatus, string> = {
   BLOCKED: '#475569',
 }
 
-const TOKEN_NAMES = ['--surface', '--fg', '--fg-muted', '--brand-primary', '--status-erro'] as const
-
-export const AllotmentNode = forwardRef<Konva.Group, AllotmentNodeProps>(function AllotmentNode(
+const AllotmentNodeInner = forwardRef<Konva.Group, AllotmentNodeProps>(function AllotmentNode(
   {
     allotment,
     isSelected,
@@ -54,6 +71,7 @@ export const AllotmentNode = forwardRef<Konva.Group, AllotmentNodeProps>(functio
     draggable,
     hideLabels = false,
     forceLight = false,
+    colors,
     onSelect,
     onDragMove,
     onDragEnd,
@@ -64,22 +82,18 @@ export const AllotmentNode = forwardRef<Konva.Group, AllotmentNodeProps>(functio
   },
   ref,
 ) {
-  const tokens = useCssTokens(TOKEN_NAMES)
   const widthPx = allotment.width * SCALE
   const heightPx = allotment.height * SCALE
   const isCompact = widthPx < 140 || heightPx < 90
   const statusColor = STATUS_COLORS[allotment.status]
   const statusText = STATUS_TEXT_COLORS[allotment.status]
-  const surface = forceLight ? '#fff' : tokens['--surface'] || '#fff'
-  const fg = forceLight ? '#0d1020' : tokens['--fg'] || '#0d1020'
-  const fgMuted = forceLight ? '#525873' : tokens['--fg-muted'] || '#525873'
-  const primary = forceLight ? '#2563eb' : tokens['--brand-primary'] || '#2563eb'
-  const erro = forceLight ? '#ef4444' : tokens['--status-erro'] || '#ef4444'
+  const c = forceLight ? LIGHT_COLORS : colors ?? LIGHT_COLORS
+  const { surface, fg, fgMuted, primary, erro } = c
 
   const dimensionsLabel = `${allotment.width}×${allotment.height}m`
   const priceLabel = fmtBRLcompact(allotment.price)
 
-  const stripeFill = useMemo(() => statusColor, [statusColor])
+  const stripeFill = statusColor
 
   return (
     <Group
@@ -153,6 +167,10 @@ export const AllotmentNode = forwardRef<Konva.Group, AllotmentNodeProps>(functio
         shadowBlur={isSelected ? 18 : 4}
         shadowOpacity={isSelected ? 0.45 : 0.18}
         shadowOffsetY={isSelected ? 6 : 2}
+        // Evita o buffer offscreen do Konva (fill+stroke+shadow) — ganho de
+        // performance com diferença visual desprezível aqui.
+        perfectDrawEnabled={false}
+        shadowForStrokeEnabled={false}
       />
 
       {/* Top stripe */}
@@ -288,6 +306,13 @@ export const AllotmentNode = forwardRef<Konva.Group, AllotmentNodeProps>(functio
     </Group>
   )
 })
+
+/**
+ * Memoizado: numa cena com muitos stands, só re-renderiza o node cujas props
+ * mudaram (posição, seleção, colisão). Depende de receber callbacks e `colors`
+ * referencialmente estáveis do PavilionStage.
+ */
+export const AllotmentNode = memo(AllotmentNodeInner)
 
 /**
  * Mistura uma cor rgba/hex com a surface (fundo). Como Konva não suporta

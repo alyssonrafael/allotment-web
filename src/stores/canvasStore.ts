@@ -22,7 +22,7 @@ export const useCanvasStore = create<CanvasStore>((set) => ({
   selectedIds: [],
   zoom: 1,
   snapEnabled: true,
-  autosaveEnabled: true,
+  autosaveEnabled: false,
   dirtyIds: [],
   setSelected: (id) => set({ selectedId: id, selectedIds: id ? [id] : [] }),
   toggleSelected: (id) =>

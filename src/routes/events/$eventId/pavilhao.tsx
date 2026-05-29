@@ -117,6 +117,10 @@ function PavilionEditorScreen() {
   const exportStageRef = useRef<Konva.Stage | null>(null)
   // Throttle do toast de movimento inválido (não repetir a cada frame de drag).
   const lastInvalidToastRef = useRef(0)
+  // Trava de reentrância: impede flushes concorrentes/sobrepostos do autosave.
+  const flushingRef = useRef(false)
+  // Disjuntor: nº de falhas consecutivas. Ao atingir o limite, desliga o autosave.
+  const failCountRef = useRef(0)
   /**
    * Snapshot do estado de cada stand no momento em que ele entrou em dirty
    * pela primeira vez (= estado igual ao do servidor). Usado pelo botão
@@ -137,6 +141,12 @@ function PavilionEditorScreen() {
   const createMutation = useCreateAllotment(eventId)
   const updateMutation = useUpdateAllotment(eventId)
   const deleteMutation = useDeleteAllotment(eventId)
+  // Mantém a mutation atual num ref para que `flushDirty` não precise listá-la
+  // nas deps — o objeto da mutation é recriado a cada mudança de estado
+  // (isPending/isError) e, se entrasse nas deps, recriaria `flushDirty` e
+  // re-dispararia o effect de autosave em loop.
+  const updateMutationRef = useRef(updateMutation)
+  updateMutationRef.current = updateMutation
 
   const event = eventQ.data
   const allotments = allotmentsQ.data ?? []
@@ -170,15 +180,18 @@ function PavilionEditorScreen() {
   const flushDirty = useCallback(
     async (ids: Array<string>) => {
       if (ids.length === 0) return
+      // Trava de reentrância: nunca dois flushes ao mesmo tempo.
+      if (flushingRef.current) return
       const current = qc.getQueryData<Array<Allotment>>(allotmentsKeys.byEvent(eventId))
       if (!current) return
+      flushingRef.current = true
       setSaveStatus('saving')
       try {
         await Promise.all(
           ids.map((id) => {
             const s = current.find((a) => a.id === id)
             if (!s) return Promise.resolve()
-            return updateMutation.mutateAsync({
+            return updateMutationRef.current.mutateAsync({
               id,
               payload: {
                 name: s.name,
@@ -196,13 +209,29 @@ function PavilionEditorScreen() {
           clearDirty(id)
           preDirtySnapshotsRef.current.delete(id)
         })
+        failCountRef.current = 0
         setSaveStatus('saved')
       } catch {
         setSaveStatus('idle')
-        toast.error('Falha ao salvar')
+        // Toast deduplicado por id fixo: mesmo no pior caso nunca empilha.
+        toast.error('Falha ao salvar', { id: 'autosave-error' })
+        // Mantém o dirty para retry manual; NÃO re-agenda nada aqui.
+        failCountRef.current += 1
+        // Disjuntor: após falhas consecutivas, desliga o autosave para que um
+        // erro persistente do servidor jamais vire loop. Edições ficam pendentes
+        // e o usuário salva manualmente.
+        // Desligar o autosave faz `useAutosave` limpar timer/pendentes sozinho.
+        if (failCountRef.current >= 2 && useCanvasStore.getState().autosaveEnabled) {
+          useCanvasStore.getState().toggleAutosave()
+          toast.error('Salvamento automático desativado após falhas — salve manualmente.', {
+            id: 'autosave-disabled',
+          })
+        }
+      } finally {
+        flushingRef.current = false
       }
     },
-    [qc, eventId, updateMutation, setSaveStatus, clearDirty],
+    [qc, eventId, setSaveStatus, clearDirty],
   )
 
   const {
@@ -215,12 +244,18 @@ function PavilionEditorScreen() {
     onFlush: flushDirty,
   })
 
-  // Quando autosave é ligado, dispara um flush imediato dos pendentes
+  // Ao LIGAR o autosave (transição false→true), faz um flush único dos
+  // pendentes. Dep única `autosaveEnabled` + leitura via getState evitam que
+  // mudanças de `dirtyIds`/`flushDirty` re-disparem este effect em loop.
+  const prevAutosaveRef = useRef(autosaveEnabled)
   useEffect(() => {
-    if (autosaveEnabled && dirtyIds.length > 0) {
-      void flushDirty(dirtyIds)
+    const turnedOn = autosaveEnabled && !prevAutosaveRef.current
+    prevAutosaveRef.current = autosaveEnabled
+    if (turnedOn) {
+      const pending = useCanvasStore.getState().dirtyIds
+      if (pending.length > 0) void flushDirty(pending)
     }
-  }, [autosaveEnabled, dirtyIds, flushDirty])
+  }, [autosaveEnabled, flushDirty])
 
   // Salva pendentes ao trocar de evento / desmontar
   useEffect(() => {

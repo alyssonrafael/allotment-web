@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Layer, Stage, Transformer } from 'react-konva'
 import type Konva from 'konva'
 import type { Allotment, EventDetail } from '#/types'
@@ -8,7 +8,18 @@ import { useCssTokens } from '#/hooks/useCssTokens'
 import { Grid } from './Grid'
 import { AllotmentNode } from './AllotmentNode'
 
-const TRANSFORMER_TOKENS = ['--brand-primary', '--surface'] as const
+// Lê todos os tokens uma única vez aqui e passa as cores resolvidas para Grid e
+// AllotmentNode — evita que cada node assine a store/leia getComputedStyle.
+const CANVAS_TOKENS = [
+  '--brand-primary',
+  '--surface',
+  '--fg',
+  '--fg-muted',
+  '--status-erro',
+  '--border-color',
+  '--border-strong',
+  '--surface-2',
+] as const
 
 interface PavilionStageProps {
   event: EventDetail
@@ -48,12 +59,46 @@ export function PavilionStage({
   const stageRef = useRef<Konva.Stage | null>(null)
   const transformerRef = useRef<Konva.Transformer | null>(null)
   const dragOriginsRef = useRef<Map<string, { x: number; y: number }>>(new Map())
-  const tokens = useCssTokens(TRANSFORMER_TOKENS)
+  const tokens = useCssTokens(CANVAS_TOKENS)
   const brandColor = tokens['--brand-primary'] || '#2563eb'
   const surfaceColor = tokens['--surface'] || '#ffffff'
+  const nodeColors = useMemo(
+    () => ({
+      surface: surfaceColor,
+      fg: tokens['--fg'] || '#0d1020',
+      fgMuted: tokens['--fg-muted'] || '#525873',
+      primary: brandColor,
+      erro: tokens['--status-erro'] || '#ef4444',
+    }),
+    [tokens, surfaceColor, brandColor],
+  )
+  const gridColors = useMemo(
+    () => ({
+      fine: tokens['--border-color'] || '#e6e8f0',
+      strong: tokens['--border-strong'] || '#d4d8e6',
+      surface2: tokens['--surface-2'] || '#f1f3f9',
+    }),
+    [tokens],
+  )
   const [collisionIds, setCollisionIds] = useState<Array<string>>([])
+  // Espelha `collisionIds` num ref para comparar sem re-render e evitar
+  // setState redundante a cada frame de drag (a causa principal do travamento).
+  const collisionIdsRef = useRef<Array<string>>([])
   const [mounted, setMounted] = useState(false)
   const [isTransforming, setIsTransforming] = useState(false)
+  // Refs com o estado mais recente para handlers de drag estáveis (não recriam
+  // a cada render → não quebram o React.memo dos nodes).
+  const allotmentsRef = useRef(allotments)
+  allotmentsRef.current = allotments
+  const eventRef = useRef(event)
+  eventRef.current = event
+
+  const setCollisions = useCallback((next: Array<string>) => {
+    const cur = collisionIdsRef.current
+    if (cur.length === next.length && cur.every((v, i) => v === next[i])) return
+    collisionIdsRef.current = next
+    setCollisionIds(next)
+  }, [])
 
   // Auto-pan refs
   const autoPanRafRef = useRef<number | null>(null)
@@ -132,6 +177,66 @@ export function PavilionStage({
     [autoPanTick],
   )
 
+  // Handlers de drag estáveis: leem `allotments`/`event` via ref para nunca
+  // recriar — assim o React.memo dos nodes não é invalidado a cada render.
+  const handleNodeDragStart = useCallback(
+    (id: string) => {
+      const a = allotmentsRef.current.find((s) => s.id === id)
+      if (a) dragOriginsRef.current.set(id, { x: a.x, y: a.y })
+      setCollisions([])
+    },
+    [setCollisions],
+  )
+
+  const handleNodeDragMove = useCallback(
+    (id: string, x: number, y: number) => {
+      const list = allotmentsRef.current
+      const base = list.find((s) => s.id === id)
+      if (!base) return
+      const moving = { ...base, x, y }
+      const obstructors = list.filter((s) => s.id !== id && detectOverlap(s, moving))
+      setCollisions(obstructors.length > 0 ? [...obstructors.map((s) => s.id), id] : [])
+    },
+    [setCollisions],
+  )
+
+  const handleNodeDragEnd = useCallback(
+    (id: string, x: number, y: number) => {
+      stopAutoPan()
+      const list = allotmentsRef.current
+      const ev = eventRef.current
+      const base = list.find((s) => s.id === id)
+      if (!base) return
+      const moving = { ...base, x, y }
+      const revert = () => {
+        const origin = dragOriginsRef.current.get(id)
+        if (!origin) return
+        const node = stageRef.current?.findOne<Konva.Node>(`#${id}`)
+        if (node) {
+          node.x(origin.x * SCALE)
+          node.y(origin.y * SCALE)
+        }
+      }
+      const obstructors = list.filter((s) => s.id !== id && detectOverlap(s, moving))
+      if (obstructors.length > 0) {
+        revert()
+        setCollisions([])
+        onInvalidMove?.('overlap')
+        return
+      }
+      if (isOutOfBounds(moving, ev)) {
+        revert()
+        setCollisions([])
+        onInvalidMove?.('bounds')
+        return
+      }
+      setCollisions([])
+      dragOriginsRef.current.delete(id)
+      onPositionCommit(id, x, y)
+    },
+    [stopAutoPan, setCollisions, onInvalidMove, onPositionCommit],
+  )
+
   // Auto-pan durante o resize: o Konva Transformer não expõe um onMove com a
   // posição do cursor, então escutamos mousemove na janela enquanto o
   // `isTransforming` está ativo. Quando termina, paramos o loop.
@@ -182,9 +287,16 @@ export function PavilionStage({
           if (e.target === e.target.getStage()) onClearSelection()
         }}
       >
-        <Layer>
-          <Grid widthMeters={event.canvasWidth} heightMeters={event.canvasHeight} />
+        {/* Grade numa Layer estática própria: não redesenha durante drag/zoom. */}
+        <Layer listening={false}>
+          <Grid
+            widthMeters={event.canvasWidth}
+            heightMeters={event.canvasHeight}
+            colors={gridColors}
+          />
+        </Layer>
 
+        <Layer>
           {allotments.map((allotment) => {
             const isSelected = selectedIds.includes(allotment.id)
             const isCollision = collisionIds.includes(allotment.id)
@@ -198,60 +310,14 @@ export function PavilionStage({
                 isCollision={isCollision}
                 hideLabels={hideLabels}
                 draggable={true}
+                colors={nodeColors}
                 canvasWidth={event.canvasWidth}
                 canvasHeight={event.canvasHeight}
                 onSelect={onSelect}
-                onDragStart={(id) => {
-                  const a = allotments.find((s) => s.id === id)
-                  if (a) dragOriginsRef.current.set(id, { x: a.x, y: a.y })
-                  setCollisionIds([])
-                }}
+                onDragStart={handleNodeDragStart}
                 onDragCursor={handleDragCursor}
-                onDragMove={(id, x, y) => {
-                  const moving = { ...allotment, x, y }
-                  const obstructors = allotments
-                    .filter((s) => s.id !== id)
-                    .filter((s) => detectOverlap(s, moving))
-                  setCollisionIds(
-                    obstructors.length > 0 ? [...obstructors.map((s) => s.id), id] : [],
-                  )
-                }}
-                onDragEnd={(id, x, y) => {
-                  stopAutoPan()
-                  const moving = { ...allotment, x, y }
-                  const obstructors = allotments
-                    .filter((s) => s.id !== id)
-                    .filter((s) => detectOverlap(s, moving))
-                  if (obstructors.length > 0) {
-                    const origin = dragOriginsRef.current.get(id)
-                    if (origin) {
-                      const node = stageRef.current?.findOne<Konva.Node>(`#${id}`)
-                      if (node) {
-                        node.x(origin.x * SCALE)
-                        node.y(origin.y * SCALE)
-                      }
-                    }
-                    setCollisionIds([])
-                    onInvalidMove?.('overlap')
-                    return
-                  }
-                  if (isOutOfBounds(moving, event)) {
-                    const origin = dragOriginsRef.current.get(id)
-                    if (origin) {
-                      const node = stageRef.current?.findOne<Konva.Node>(`#${id}`)
-                      if (node) {
-                        node.x(origin.x * SCALE)
-                        node.y(origin.y * SCALE)
-                      }
-                    }
-                    setCollisionIds([])
-                    onInvalidMove?.('bounds')
-                    return
-                  }
-                  setCollisionIds([])
-                  dragOriginsRef.current.delete(id)
-                  onPositionCommit(id, x, y)
-                }}
+                onDragMove={handleNodeDragMove}
+                onDragEnd={handleNodeDragEnd}
               />
             )
           })}
@@ -321,11 +387,11 @@ export function PavilionStage({
               const hits = allotments
                 .filter((s) => s.id !== id)
                 .filter((s) => detectOverlap(s, candidate))
-              setCollisionIds(hits.length > 0 ? [...hits.map((s) => s.id), id] : [])
+              setCollisions(hits.length > 0 ? [...hits.map((s) => s.id), id] : [])
             }}
             onTransformEnd={() => {
               setIsTransforming(false)
-              setCollisionIds([])
+              setCollisions([])
               if (selectedIds.length !== 1) return
               const id = selectedIds[0]
               const stage = stageRef.current

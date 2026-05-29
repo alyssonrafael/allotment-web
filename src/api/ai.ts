@@ -1,4 +1,5 @@
 import { api } from '#/api/client'
+import { sanitizeParseEvent, sanitizeParseVenue } from '#/lib/aiSanitize'
 import type {
   ParseEventRequest,
   ParseEventResponse,
@@ -15,7 +16,7 @@ export async function parseVenue(
   const { data } = await api.post<ParseVenueResponse>('/ai/parse-venue', body, {
     timeout: AI_TIMEOUT,
   })
-  return data
+  return sanitizeParseVenue(data)
 }
 
 export async function parseEvent(
@@ -24,5 +25,5 @@ export async function parseEvent(
   const { data } = await api.post<ParseEventResponse>('/ai/parse-event', body, {
     timeout: AI_TIMEOUT,
   })
-  return data
+  return sanitizeParseEvent(data)
 }
